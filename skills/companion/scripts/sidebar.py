@@ -28,15 +28,21 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from dataclasses import dataclass, field
+
 try:
     from rich import box
     from rich.console import Console
+    from rich.live import Live
     from rich.panel import Panel
+    from rich.text import Text
 except ImportError:
     os.system("pip3 install rich --break-system-packages -q")
     from rich import box
     from rich.console import Console
+    from rich.live import Live
     from rich.panel import Panel
+    from rich.text import Text
 
 PIPE_PATH = "/tmp/companion.pipe"
 STATE_PATH = ".companion/state.json"
@@ -90,6 +96,124 @@ def persist_capture(item: dict, session_id: str):
         data.setdefault("captures", []).append(item)
 
     inc_path.write_text(json.dumps(data, indent=2))
+
+
+# ── Mini session + chart ──────────────────────────────────────────────────────
+
+
+@dataclass
+class MiniSession:
+    """State for one implementation cycle (between two stop events)."""
+
+    modules: dict[str, str] = field(default_factory=dict)  # name -> "loaded" | "boundary"
+    module_order: list[str] = field(default_factory=list)  # order of first touch
+    files: list[dict] = field(default_factory=list)  # [{path, module, ts}] — last 5
+    impact: list[dict] = field(default_factory=list)  # plan impact items
+    plan_file: str | None = None
+    started_at: str = ""
+
+
+_modules_cache = None
+
+
+def get_file_module(file_path: str, cwd: str) -> str | None:
+    """Map a file path to its owning module using .companion/modules.json."""
+    global _modules_cache
+    if _modules_cache is None:
+        try:
+            _modules_cache = json.loads((Path(cwd) / ".companion" / "modules.json").read_text())
+        except Exception:
+            _modules_cache = []
+    for module in _modules_cache:
+        for path in module.get("paths", []):
+            if path.rstrip("/") in file_path:
+                return module["name"]
+    return None
+
+
+def build_chart(mini: MiniSession, loaded_modules: list[str]) -> Panel:
+    """Build a Rich Panel showing the current mini session state."""
+    lines = []
+
+    # Module sequence
+    if mini.module_order:
+        mod_parts = []
+        for name in mini.module_order:
+            status = mini.modules.get(name, "loaded")
+            if status == "boundary":
+                mod_parts.append(f"[yellow]{name} ○[/yellow]")
+            else:
+                mod_parts.append(f"[green]{name} ●[/green]")
+        lines.append("  " + " ──→ ".join(mod_parts))
+        lines.append("")
+
+    # Impact section
+    if mini.impact:
+        adds = [i for i in mini.impact if i.get("classification") == "add"]
+        modifies = [i for i in mini.impact if i.get("classification") == "modify"]
+        confs = [i for i in mini.impact if i.get("classification") == "conflict"]
+
+        if adds:
+            for item in adds:
+                lines.append(f"  [green]+[/green] {item.get('text', '')}")
+        if modifies:
+            for item in modifies:
+                lines.append(f"  [yellow]~[/yellow] {item.get('text', '')}")
+                existing = item.get("existing_rule")
+                if existing:
+                    lines.append(f"    [dim]was: {existing}[/dim]")
+        if confs:
+            for item in confs:
+                lines.append(f"  [red]⚠[/red] {item.get('text', '')}")
+                existing = item.get("existing_rule")
+                if existing:
+                    lines.append(f"    [dim]spec: {existing}[/dim]")
+        lines.append("")
+
+    # Files section — last 5
+    if mini.files:
+        for f in mini.files[-5:]:
+            mod_tag = f.get("module", "")
+            mod_label = f" [dim]\\[{mod_tag}][/dim]" if mod_tag else ""
+            alert = " [yellow]⚠[/yellow]" if f.get("alert") else ""
+            lines.append(f"  → {Path(f['path']).name}{mod_label}{alert}")
+
+    content = "\n".join(lines) if lines else "[dim]waiting for file changes...[/dim]"
+    return Panel(content, title="[bold]anchor[/bold]", border_style="dim", box=box.ROUNDED)
+
+
+def update_mini_session(mini: MiniSession, event: dict, loaded_modules: list[str]):
+    """Update mini session state from a post_tool_use event."""
+    file_path = event.get("file_path", "")
+    cwd = event.get("cwd", os.getcwd())
+    ts = datetime.now().strftime("%H:%M:%S")
+
+    if not file_path:
+        return
+
+    # Detect plan file
+    if ".claude/plans/" in file_path and file_path.endswith(".md"):
+        mini.plan_file = file_path
+
+    # Map file to module
+    module = get_file_module(file_path, cwd)
+    if module and module not in mini.modules:
+        mini.module_order.append(module)
+        if module in loaded_modules:
+            mini.modules[module] = "loaded"
+        else:
+            mini.modules[module] = "boundary"
+
+    # Track file (keep last 5)
+    is_boundary = module and module not in loaded_modules
+    mini.files.append({
+        "path": file_path,
+        "module": module or "unknown",
+        "ts": ts,
+        "alert": is_boundary,
+    })
+    if len(mini.files) > 5:
+        mini.files = mini.files[-5:]
 
 
 # ── LLM calls ─────────────────────────────────────────────────────────────────
@@ -955,6 +1079,7 @@ def main():
 
     state = get_state()
     render_startup(state)
+    loaded_modules = state.get("last_loaded_modules", [])
 
     # Diagnostics: verify env for LLM calls
     import shutil
@@ -968,6 +1093,19 @@ def main():
     t = threading.Thread(target=conflict_input_listener, daemon=True)
     t.start()
 
+    live = None
+    mini = None
+
+    def stop_live():
+        nonlocal live, mini
+        if live:
+            try:
+                live.stop()
+            except Exception:
+                pass
+            live = None
+        mini = None
+
     while True:
         try:
             with open(PIPE_PATH) as pipe:
@@ -978,37 +1116,70 @@ def main():
                     try:
                         event = json.loads(line)
                         event_type = event.get("event")
-                        ts = datetime.now().strftime("%H:%M:%S")
 
-                        if event_type == "stop":
+                        if event_type == "post_tool_use":
+                            # Start or update the live chart
+                            if mini is None:
+                                mini = MiniSession(started_at=datetime.now().strftime("%H:%M:%S"))
+                            update_mini_session(mini, event, loaded_modules)
+
+                            if live is None:
+                                live = Live(build_chart(mini, loaded_modules), console=console, refresh_per_second=4)
+                                live.start()
+                            else:
+                                live.update(build_chart(mini, loaded_modules))
+
+                            # Plan file detection → run impact analysis in background
+                            if mini.plan_file and not mini.impact:
+                                plan_path = event.get("file_path", "")
+                                if ".claude/plans/" in plan_path:
+                                    def _analyze_plan(m=mini, l=live, p=plan_path, lm=loaded_modules):
+                                        try:
+                                            cwd = event.get("cwd", os.getcwd())
+                                            content = Path(p).read_text()[:20000]
+                                            specs = load_all_specs(cwd, lm) if lm else {}
+                                            spec_ctx = json.dumps(
+                                                {n: {"summary": s.get("summary", ""), "business_rules": s.get("business_rules", []),
+                                                     "non_negotiables": s.get("non_negotiables", []), "tradeoffs": s.get("tradeoffs", [])}
+                                                 for n, s in specs.items()}, indent=2
+                                            ) if specs else "{}"
+                                            prompt = f"Canonical spec:\n{spec_ctx}\n\nPlan:\n{content}\n\nClassify each architectural decision."
+                                            raw = call_claude(prompt, PLAN_IMPACT_SYSTEM)
+                                            items = json.loads(raw) if raw else []
+                                            if isinstance(items, list):
+                                                m.impact = items
+                                                if l:
+                                                    try:
+                                                        l.update(build_chart(m, lm))
+                                                    except Exception:
+                                                        pass
+                                        except Exception as e:
+                                            log_error(f"Plan analysis error: {e}")
+                                    threading.Thread(target=_analyze_plan, daemon=True).start()
+
+                        elif event_type == "stop":
+                            stop_live()
+                            # Run extraction in a thread (uses call_claude which needs the load-bearing print)
                             threading.Thread(target=handle_stop, args=(event,), daemon=True).start()
 
                         elif event_type == "exit_plan_mode":
-                            console.print(
-                                f"[dim]{ts} ← plan complete, running deep extraction...[/dim]"
-                            )
-                            threading.Thread(
-                                target=handle_exit_plan_mode, args=(event,), daemon=True
-                            ).start()
-
-                        elif event_type == "post_tool_use":
-                            threading.Thread(
-                                target=handle_post_tool_use, args=(event,), daemon=True
-                            ).start()
+                            # Persist captures — analysis already happened on plan file write
+                            threading.Thread(target=handle_exit_plan_mode, args=(event,), daemon=True).start()
 
                         elif event_type == "session_end":
-                            console.print(f"[dim]{ts} ← session ending...[/dim]")
-                            threading.Thread(
-                                target=handle_session_end, args=(event,), daemon=True
-                            ).start()
+                            stop_live()
+                            console.print(f"[dim]{datetime.now().strftime('%H:%M:%S')} ← session ending...[/dim]")
+                            threading.Thread(target=handle_session_end, args=(event,), daemon=True).start()
 
                     except json.JSONDecodeError:
                         continue
 
         except KeyboardInterrupt:
+            stop_live()
             console.print("\n[dim]companion stopped[/dim]")
             break
         except Exception as e:
+            stop_live()
             console.print(f"[red]  Pipe error: {e}[/red]")
             log_error(f"Pipe error: {e}")
             time.sleep(1)
