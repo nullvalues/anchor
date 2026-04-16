@@ -284,4 +284,4 @@ MIT
 
 ---
 
-*Built by [Nilanjan Roy](https://github.com/nilanjan) — March 2026*
+*Built by [Nilanjan R](https://github.com/nraychaudhuri) — March 2026*
