@@ -203,3 +203,304 @@ class TestClaudeBuildMdNoMigration:
     def test_other_sections_still_present(self):
         assert "## Build loop" in self.output
         assert "## Checkpoint sequence" in self.output
+
+
+# ---------------------------------------------------------------------------
+# Agent template shared context
+# ---------------------------------------------------------------------------
+
+AGENT_CONTEXT = {
+    "project_name": "myapp",
+    "build_command": "PATH=$HOME/.local/bin:$PATH uv run pytest tests/pairmode/ -x -q",
+    "test_command": "PATH=$HOME/.local/bin:$PATH uv run pytest tests/ -x -q",
+    "protected_paths": [
+        "hooks/",
+        "skills/seed/scripts/",
+        ".claude-plugin/plugin.json",
+    ],
+    "domain_isolation_rule": "filter all queries by workspace_id",
+    "checklist_items": [
+        {
+            "name": "HOOK PERFORMANCE",
+            "description": "Do any hook scripts make API calls or block? Hooks are thin relays only.",
+            "severity": "CRITICAL",
+        },
+        {
+            "name": "PIPE CONTRACT",
+            "description": "Do all hook scripts write only to /tmp/companion.pipe?",
+            "severity": "CRITICAL",
+        },
+        {
+            "name": "SKILL ISOLATION",
+            "description": "Do any skill scripts use hardcoded absolute paths?",
+            "severity": "MEDIUM",
+        },
+    ],
+}
+
+
+# ---------------------------------------------------------------------------
+# Builder agent template tests
+# ---------------------------------------------------------------------------
+
+class TestBuilderAgentTemplate:
+    def setup_method(self):
+        self.output = render("agents/builder.md.j2", AGENT_CONTEXT)
+
+    def test_renders_without_error(self):
+        assert self.output
+
+    def test_frontmatter_name(self):
+        assert "name: builder" in self.output
+
+    def test_frontmatter_tools(self):
+        assert "tools: [Read, Write, Edit, Glob, Grep, Bash]" in self.output
+
+    def test_frontmatter_model(self):
+        assert "model: sonnet" in self.output
+
+    def test_project_name_in_description(self):
+        assert "myapp" in self.output
+
+    def test_before_writing_section(self):
+        assert "Before writing anything" in self.output
+        assert "architecture.md" in self.output
+
+    def test_protected_paths_listed(self):
+        assert "hooks/" in self.output
+        assert ".claude-plugin/plugin.json" in self.output
+
+    def test_implementation_rules_section(self):
+        assert "Implementation rules" in self.output
+        assert "filter all queries by workspace_id" in self.output
+
+    def test_test_command_substituted(self):
+        assert "PATH=$HOME/.local/bin:$PATH uv run pytest tests/ -x -q" in self.output
+
+    def test_developer_action_gates_section(self):
+        assert "DEVELOPER ACTION" in self.output
+        assert "BUILDER PAUSED" in self.output
+
+    def test_completion_report_format(self):
+        assert "BUILT: Story" in self.output
+        assert "Files changed:" in self.output
+        assert "Tests:" in self.output
+        assert "Build gate: PASS" in self.output
+
+    def test_builder_stuck_format(self):
+        assert "BUILDER STUCK" in self.output
+        assert "Attempted:" in self.output
+        assert "loop-breaker" in self.output
+
+
+# ---------------------------------------------------------------------------
+# Reviewer agent template tests
+# ---------------------------------------------------------------------------
+
+class TestReviewerAgentTemplate:
+    def setup_method(self):
+        self.output = render("agents/reviewer.md.j2", AGENT_CONTEXT)
+
+    def test_renders_without_error(self):
+        assert self.output
+
+    def test_frontmatter_name(self):
+        assert "name: reviewer" in self.output
+
+    def test_project_name_in_description(self):
+        assert "myapp" in self.output
+
+    def test_before_reviewing_section(self):
+        assert "Before reviewing" in self.output
+        assert "architecture.md" in self.output
+        assert "git diff HEAD" in self.output
+
+    def test_checklist_items_rendered(self):
+        assert "HOOK PERFORMANCE" in self.output
+        assert "PIPE CONTRACT" in self.output
+        assert "SKILL ISOLATION" in self.output
+
+    def test_protected_files_checklist_item(self):
+        assert "PROTECTED FILES" in self.output
+        assert "hooks/" in self.output
+        assert ".claude-plugin/plugin.json" in self.output
+
+    def test_story_scope_checklist_item(self):
+        assert "STORY SCOPE" in self.output
+
+    def test_test_run_section(self):
+        assert "Test run" in self.output
+        assert "PATH=$HOME/.local/bin:$PATH uv run pytest tests/ -x -q" in self.output
+
+    def test_pass_conditions(self):
+        assert "PASS conditions" in self.output
+        assert "No CRITICAL findings" in self.output
+        assert "No HIGH findings" in self.output
+
+    def test_commit_format_on_pass(self):
+        assert "git add -A" in self.output
+        assert "git commit" in self.output
+        assert "REVIEW PASS" in self.output
+
+    def test_fail_conditions(self):
+        assert "FAIL conditions" in self.output
+        assert "REVIEW FAIL" in self.output
+
+    def test_revert_on_fail(self):
+        assert "git checkout ." in self.output
+        assert "git clean -fd" in self.output
+
+    def test_what_you_must_not_do_section(self):
+        assert "What you must not do" in self.output
+        assert "Do not write" in self.output
+
+
+# ---------------------------------------------------------------------------
+# Loop-breaker agent template tests
+# ---------------------------------------------------------------------------
+
+class TestLoopBreakerAgentTemplate:
+    def setup_method(self):
+        self.output = render("agents/loop-breaker.md.j2", AGENT_CONTEXT)
+
+    def test_renders_without_error(self):
+        assert self.output
+
+    def test_frontmatter_name(self):
+        assert "name: loop-breaker" in self.output
+
+    def test_project_name_in_description(self):
+        assert "myapp" in self.output
+
+    def test_input_format_section(self):
+        assert "LOOP-BREAKER:" in self.output
+        assert "TRIED:" in self.output
+
+    def test_process_section(self):
+        assert "Your process" in self.output
+        assert "architecture.md" in self.output
+        assert "root cause" in self.output
+
+    def test_domain_isolation_rule_present(self):
+        assert "filter all queries by workspace_id" in self.output
+
+    def test_protected_paths_listed(self):
+        assert "hooks/" in self.output
+
+    def test_output_format_section(self):
+        assert "LOOP-BREAKER ANALYSIS" in self.output
+        assert "Root cause:" in self.output
+        assert "Proposed approach:" in self.output
+        assert "PROTECTED FILE INVOLVED" in self.output
+
+    def test_what_you_must_not_do_section(self):
+        assert "What you must not do" in self.output
+        assert "Do not propose more than one approach" in self.output
+
+
+# ---------------------------------------------------------------------------
+# Security-auditor agent template tests
+# ---------------------------------------------------------------------------
+
+class TestSecurityAuditorAgentTemplate:
+    def setup_method(self):
+        self.output = render("agents/security-auditor.md.j2", AGENT_CONTEXT)
+
+    def test_renders_without_error(self):
+        assert self.output
+
+    def test_frontmatter_name(self):
+        assert "name: security-auditor" in self.output
+
+    def test_project_name_in_description(self):
+        assert "myapp" in self.output
+
+    def test_before_auditing_section(self):
+        assert "Before auditing" in self.output
+        assert "architecture.md" in self.output
+
+    def test_domain_isolation_rule_in_preamble(self):
+        assert "filter all queries by workspace_id" in self.output
+
+    def test_hook_integrity_check(self):
+        assert "HOOK INTEGRITY" in self.output
+        assert "CRITICAL" in self.output
+
+    def test_credential_exposure_check(self):
+        assert "CREDENTIAL EXPOSURE" in self.output
+
+    def test_path_traversal_check(self):
+        assert "PATH TRAVERSAL" in self.output
+        assert "Path.resolve()" in self.output
+
+    def test_protected_paths_listed(self):
+        assert "hooks/" in self.output
+        assert ".claude-plugin/plugin.json" in self.output
+
+    def test_domain_isolation_violation_check(self):
+        assert "DOMAIN ISOLATION" in self.output
+
+    def test_layer_violation_check(self):
+        assert "LAYER VIOLATION" in self.output
+
+    def test_report_format_section(self):
+        assert "SECURITY AUDIT" in self.output
+        assert "CRITICAL:" in self.output
+        assert "HIGH:" in self.output
+        assert "MEDIUM:" in self.output
+
+
+# ---------------------------------------------------------------------------
+# Intent-reviewer agent template tests
+# ---------------------------------------------------------------------------
+
+class TestIntentReviewerAgentTemplate:
+    def setup_method(self):
+        self.output = render("agents/intent-reviewer.md.j2", AGENT_CONTEXT)
+
+    def test_renders_without_error(self):
+        assert self.output
+
+    def test_frontmatter_name(self):
+        assert "name: intent-reviewer" in self.output
+
+    def test_project_name_in_description(self):
+        assert "myapp" in self.output
+
+    def test_before_reviewing_section(self):
+        assert "Before reviewing" in self.output
+        assert "architecture.md" in self.output
+        assert "git diff" in self.output
+
+    def test_build_and_test_commands_present(self):
+        assert "PATH=$HOME/.local/bin:$PATH uv run pytest tests/pairmode/ -x -q" in self.output
+        assert "PATH=$HOME/.local/bin:$PATH uv run pytest tests/ -x -q" in self.output
+
+    def test_domain_isolation_rule_present(self):
+        assert "filter all queries by workspace_id" in self.output
+
+    def test_story_alignment_section(self):
+        assert "Story alignment" in self.output
+        assert "ALIGNED" in self.output
+        assert "PARTIAL" in self.output
+        assert "PIVOT" in self.output
+        assert "MISSING" in self.output
+
+    def test_design_pivot_detection_section(self):
+        assert "Design pivot detection" in self.output
+        assert "API drift" in self.output
+        assert "Schema drift" in self.output
+        assert "Layer drift" in self.output
+
+    def test_isolation_drift_check(self):
+        assert "Isolation drift" in self.output
+
+    def test_output_format_section(self):
+        assert "INTENT REVIEW" in self.output
+        assert "STORY ALIGNMENT" in self.output
+        assert "PIVOTS AND CONCERNS" in self.output
+        assert "DOWNSTREAM RISKS" in self.output
+        assert "RECOMMENDED DOC EDITS" in self.output
+
+    def test_calibration_section(self):
+        assert "Calibration" in self.output
