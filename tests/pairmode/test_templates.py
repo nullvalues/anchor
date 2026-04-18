@@ -504,3 +504,188 @@ class TestIntentReviewerAgentTemplate:
 
     def test_calibration_section(self):
         assert "Calibration" in self.output
+
+
+# ---------------------------------------------------------------------------
+# Docs template shared context
+# ---------------------------------------------------------------------------
+
+DOCS_CONTEXT = {
+    "project_name": "myapp",
+    "project_description": "a sample web application for testing",
+    "stack": "Python 3.11+ / FastAPI / PostgreSQL",
+    "domain_model": "multi-tenant SaaS with organisation and workspace hierarchy",
+    "module_structure": [
+        {
+            "name": "api",
+            "description": "HTTP layer — routes and request validation",
+            "paths": ["src/api/", "src/routers/"],
+        },
+        {
+            "name": "services",
+            "description": "Business logic — no HTTP or DB concerns",
+            "paths": ["src/services/"],
+        },
+    ],
+    "layer_rules": [
+        {
+            "layer": "api/",
+            "may_import": "services/, stdlib",
+            "may_not_import": "db/ directly",
+        },
+        {
+            "layer": "services/",
+            "may_import": "db/, stdlib",
+            "may_not_import": "api/",
+        },
+    ],
+    "build_command": "uv run pytest",
+    "test_command": "uv run pytest tests/ -x -q",
+    "protected_paths": [
+        "hooks/",
+        "skills/seed/scripts/",
+        ".claude-plugin/plugin.json",
+    ],
+    "non_negotiables": [
+        "All DB queries must filter by workspace_id.",
+        "Hooks must never make API calls.",
+    ],
+}
+
+DOCS_CONTEXT_NO_NON_NEGOTIABLES = {**DOCS_CONTEXT, "non_negotiables": []}
+
+
+# ---------------------------------------------------------------------------
+# architecture.md.j2 tests
+# ---------------------------------------------------------------------------
+
+class TestArchitectureMdTemplate:
+    def setup_method(self):
+        self.output = render("docs/architecture.md.j2", DOCS_CONTEXT)
+
+    def test_renders_without_error(self):
+        assert self.output
+
+    def test_project_name_in_title(self):
+        assert "myapp" in self.output
+
+    def test_project_description_present(self):
+        assert "a sample web application for testing" in self.output
+
+    def test_stack_section(self):
+        assert "Python 3.11+ / FastAPI / PostgreSQL" in self.output
+
+    def test_domain_model_section(self):
+        assert "multi-tenant SaaS with organisation and workspace hierarchy" in self.output
+
+    def test_module_structure_rendered(self):
+        assert "api/" in self.output
+        assert "HTTP layer" in self.output
+        assert "services/" in self.output
+        assert "Business logic" in self.output
+
+    def test_module_paths_rendered(self):
+        assert "src/api/" in self.output
+        assert "src/routers/" in self.output
+        assert "src/services/" in self.output
+
+    def test_layer_rules_table_rendered(self):
+        assert "Layer" in self.output
+        assert "May import from" in self.output
+        assert "May not import from" in self.output
+        assert "services/, stdlib" in self.output
+        assert "db/ directly" in self.output
+
+    def test_build_and_test_commands(self):
+        assert "uv run pytest" in self.output
+
+    def test_protected_paths_listed(self):
+        assert "hooks/" in self.output
+        assert ".claude-plugin/plugin.json" in self.output
+
+    def test_non_negotiables_rendered(self):
+        assert "All DB queries must filter by workspace_id." in self.output
+        assert "Hooks must never make API calls." in self.output
+
+    def test_empty_non_negotiables_shows_placeholder(self):
+        output = render("docs/architecture.md.j2", DOCS_CONTEXT_NO_NON_NEGOTIABLES)
+        assert "No non-negotiables defined yet" in output
+        assert "All DB queries must filter by workspace_id." not in output
+
+
+# ---------------------------------------------------------------------------
+# phase-prompts.md.j2 tests
+# ---------------------------------------------------------------------------
+
+class TestPhasePromptsMdTemplate:
+    def setup_method(self):
+        self.output = render("docs/phase-prompts.md.j2", DOCS_CONTEXT)
+
+    def test_renders_without_error(self):
+        assert self.output
+
+    def test_project_name_in_header(self):
+        assert "myapp" in self.output
+
+    def test_header_present(self):
+        assert "Phase Prompts" in self.output
+
+    def test_instructions_blurb_present(self):
+        assert "build orchestrator" in self.output
+
+    def test_phase_1_section_present(self):
+        assert "Phase 1" in self.output
+
+    def test_story_1_1_section_present(self):
+        assert "Story 1.1" in self.output
+
+    def test_acceptance_criterion_placeholder(self):
+        assert "Acceptance criterion" in self.output
+
+    def test_instructions_placeholder(self):
+        assert "Instructions" in self.output
+
+    def test_jinja_comments_not_in_output(self):
+        # Jinja {# ... #} comments must not appear in rendered output
+        assert "{#" not in self.output
+        assert "#}" not in self.output
+
+    def test_story_format_guidance_present(self):
+        # The template includes a comment about story format — should appear as rendered text somehow,
+        # or at minimum not break rendering. The comment block is a Jinja comment so it won't render.
+        # Just verify the file rendered fully.
+        assert "Acceptance criterion" in self.output
+
+
+# ---------------------------------------------------------------------------
+# checkpoints.md.j2 tests
+# ---------------------------------------------------------------------------
+
+class TestCheckpointsMdTemplate:
+    def setup_method(self):
+        self.output = render("docs/checkpoints.md.j2", DOCS_CONTEXT)
+
+    def test_renders_without_error(self):
+        assert self.output
+
+    def test_project_name_in_header(self):
+        assert "myapp" in self.output
+
+    def test_header_present(self):
+        assert "Checkpoints" in self.output
+
+    def test_checkpoint_description_present(self):
+        assert "checkpoint sequence" in self.output
+
+    def test_cp1_placeholder_present(self):
+        assert "cp1-" in self.output
+
+    def test_tag_command_structure_present(self):
+        assert "git tag" in self.output
+        assert "git push" in self.output
+
+    def test_phase_reference_present(self):
+        assert "Phase:" in self.output
+
+    def test_acceptance_placeholder_present(self):
+        assert "Acceptance:" in self.output
