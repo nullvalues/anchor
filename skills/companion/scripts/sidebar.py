@@ -112,6 +112,7 @@ class MiniSession:
     impact: list[dict] = field(default_factory=list)  # plan impact items
     plan_file: str | None = None
     active_module: str | None = None  # module of most recent file change
+    status: str = ""  # shown in chart: "analyzing plan...", etc.
     started_at: str = ""
 
 
@@ -186,6 +187,11 @@ def build_chart(mini: MiniSession, loaded_modules: list[str]) -> Panel:
             alert = " [yellow]⚠[/yellow]" if f.get("alert") else ""
             lines.append(f"  → {Path(f['path']).name}{mod_label}{alert}")
 
+    # Status line
+    if mini.status:
+        lines.append("")
+        lines.append(f"  [dim yellow]{mini.status}[/dim yellow]")
+
     content = "\n".join(lines) if lines else "[dim]waiting for file changes...[/dim]"
     return Panel(content, title="[bold]anchor[/bold]", border_style="dim", box=box.ROUNDED)
 
@@ -199,8 +205,10 @@ def update_mini_session(mini: MiniSession, event: dict, loaded_modules: list[str
     if not file_path:
         return
 
-    # Detect plan file
+    # Detect plan file — clear impact on re-edit so analysis re-triggers
     if ".claude/plans/" in file_path and file_path.endswith(".md"):
+        if mini.plan_file == file_path and mini.impact:
+            mini.impact = []
         mini.plan_file = file_path
 
     # Map file to module
@@ -234,7 +242,7 @@ def update_mini_session(mini: MiniSession, event: dict, loaded_modules: list[str
 # ── LLM calls ─────────────────────────────────────────────────────────────────
 
 
-def call_claude(prompt: str, system: str, model: str = "claude-haiku-4-5-20251001") -> str | None:
+def call_claude(prompt: str, system: str, model: str = "claude-haiku-4-5-20251001", timeout: int = 60) -> str | None:
     try:
         from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
     except ImportError as e:
@@ -281,7 +289,7 @@ def call_claude(prompt: str, system: str, model: str = "claude-haiku-4-5-2025100
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            raw = loop.run_until_complete(asyncio.wait_for(_run(), timeout=60))
+            raw = loop.run_until_complete(asyncio.wait_for(_run(), timeout=timeout))
         finally:
             loop.close()
         console.print(f"[dim]  final parts: {len(collected['parts'])}, result_msg: {collected['result_msg'] is not None}[/dim]")
@@ -396,25 +404,28 @@ For each architectural decision or rule in the plan, classify it as:
 - "modify": changes or refines an existing spec rule (include what the spec currently says)
 - "conflict": directly contradicts a non-negotiable or existing rule
 
-Return ONLY a JSON array. Return [] if the plan is purely tactical (no spec-level impact).
+Return ONLY valid JSON with this structure:
 
-[
-  {
-    "classification": "add | modify | conflict",
-    "module": "which spec module this affects",
-    "type": "business_rule | non_negotiable | tradeoff | decision",
-    "text": "what the plan is saying",
-    "existing_rule": "the spec rule this modifies/conflicts with (null for add)",
-    "severity": "info | warning | violation",
-    "evidence": "brief quote from the plan"
-  }
-]
+{
+  "items": [
+    {
+      "classification": "add | modify | conflict",
+      "module": "which spec module this affects",
+      "type": "business_rule | non_negotiable | tradeoff | decision",
+      "text": "what the plan is saying",
+      "existing_rule": "the spec rule this modifies/conflicts with (null for add)",
+      "severity": "info | warning | violation",
+      "evidence": "brief quote from the plan"
+    }
+  ],
+  "summary": "one-line summary of what this plan means for the spec"
+}
 
 Rules:
 - Stay at product/architecture level. No implementation details.
 - Only flag "conflict" if the plan clearly contradicts a non-negotiable or established rule.
 - "modify" means the plan refines an existing rule, not trivially restates it.
-- If the plan is just "implement feature X using tool Y", that's tactical — return [].
+- If the plan has no spec-level impact, return empty items with a summary explaining why (e.g., "Deployment checklist — no architectural decisions or spec changes").
 - severity: "info" for add, "warning" for modify, "warning" or "violation" for conflict."""
 
 
@@ -722,19 +733,20 @@ def render_planning(ts: str, new_captures: list[dict], new_conflicts: list[dict]
                         break  # show most recent lineage entry
             except Exception:
                 pass
+        conflicts.append(conflict)
+        cnum = len(conflicts)
         console.print(
             Panel(
                 f"[{color}]{conflict.get('explanation', '')}[/{color}]\n\n"
                 f"[dim]Existing rule:[/dim] {conflict.get('existing_rule', '')}\n"
                 f"[dim]Module:[/dim] {conflict.get('module', '')}"
                 f"{lineage_line}\n\n"
-                f"[bold]Action: \\[s]nooze / \\[r]ecord / \\[o]verride[/bold]",
-                title=f"[bold {color}]⚠️  CONFLICT[/bold {color}]",
+                f"[bold]\\[s{cnum}] snooze / \\[r{cnum}] record / \\[o{cnum}] override[/bold]",
+                title=f"[bold {color}]⚠️  CONFLICT #{cnum}[/bold {color}]",
                 border_style=color,
                 box=box.ROUNDED,
             )
         )
-        conflicts.append(conflict)
 
 
 def render_plan_impact(adds: list[dict], modifies: list[dict], confs: list[dict]):
@@ -779,20 +791,20 @@ def render_plan_impact(adds: list[dict], modifies: list[dict], confs: list[dict]
             for item in items:
                 severity = item.get("severity", "warning")
                 color = "red" if severity == "violation" else "yellow"
+                with lock:
+                    conflicts.append(item)
+                    cnum = len(conflicts)
                 console.print(
                     Panel(
                         f"[{color}]Plan says:[/{color}] {item.get('text', '')}\n"
                         f"[dim]Existing rule ({item.get('type', 'rule')}):[/dim] {item.get('existing_rule', '')}\n"
                         f"[dim]Evidence:[/dim] {item.get('evidence', '')}\n\n"
-                        f"[bold]Action: \\[s]nooze / \\[r]ecord / \\[o]verride[/bold]",
-                        title=f"[bold {color}]⚠️  CONFLICT[/bold {color}]",
+                        f"[bold]\\[s{cnum}] snooze / \\[r{cnum}] record / \\[o{cnum}] override[/bold]",
+                        title=f"[bold {color}]⚠️  CONFLICT #{cnum}[/bold {color}]",
                         border_style=color,
                         box=box.ROUNDED,
                     )
                 )
-                # Also add to global conflicts list so the input listener can act on it
-                with lock:
-                    conflicts.append(item)
 
     console.print()
 
@@ -1011,39 +1023,55 @@ def handle_session_end(event: dict):
 def conflict_input_listener():
     """
     Background thread that reads keyboard input for conflict actions.
-    s = snooze, r = record, o = override (prompts for reason)
+    Accepts: s, r, o (acts on latest) or s1, r2, o3 (acts on specific conflict #)
     """
+    import re
     cwd = os.getcwd()
     while True:
         try:
             key = input().strip().lower()
+            # Parse action + optional number: s, r, o, s1, r2, o3
+            match = re.match(r'^([sro])(\d*)$', key)
+            if not match:
+                continue
+            action_key = match.group(1)
+            num_str = match.group(2)
+
             with lock:
                 if not conflicts:
                     continue
-                latest = conflicts[-1]
+                if num_str:
+                    idx = int(num_str) - 1  # 1-based to 0-based
+                    if idx < 0 or idx >= len(conflicts):
+                        console.print(f"[dim]  no conflict #{num_str}[/dim]")
+                        continue
+                    target = conflicts[idx]
+                else:
+                    idx = len(conflicts) - 1
+                    target = conflicts[-1]
 
-            if key == "s":
-                handle_conflict_action(latest, "snooze", "", cwd)
-                console.print("[dim]  → snoozed[/dim]")
+            if action_key == "s":
+                handle_conflict_action(target, "snooze", "", cwd)
+                console.print(f"[dim]  → snoozed #{idx + 1}[/dim]")
                 with lock:
-                    conflicts.pop()
+                    conflicts.pop(idx)
 
-            elif key == "r":
+            elif action_key == "r":
                 console.print("[dim]  note (enter to skip):[/dim] ", end="")
                 try:
                     note = input().strip()
                 except EOFError:
                     note = ""
-                handle_conflict_action(latest, "record", note, cwd)
+                handle_conflict_action(target, "record", note, cwd)
                 with lock:
-                    conflicts.pop()
+                    conflicts.pop(idx)
 
-            elif key == "o":
+            elif action_key == "o":
                 console.print("[bold]Reason for override:[/bold] ", end="")
                 reason = input().strip()
-                handle_conflict_action(latest, "override", reason, cwd)
+                handle_conflict_action(target, "override", reason, cwd)
                 with lock:
-                    conflicts.pop()
+                    conflicts.pop(idx)
 
         except EOFError:
             break
@@ -1080,8 +1108,9 @@ def render_startup(state: dict):
     all_non_negs = []
 
     if loaded_modules:
+        header_lines.append("  [dim]modules:[/dim] " + ", ".join(f"[bold]{n}[/bold]" for n in loaded_modules))
+
         for name in loaded_modules:
-            summary = ""
             try:
                 cwd = os.getcwd()
                 pointer = Path(cwd) / ".companion" / "product.json"
@@ -1090,22 +1119,16 @@ def render_startup(state: dict):
                 spec_p = Path(config["spec_location"]) / "openspec" / "specs" / name / "spec.json"
                 if spec_p.exists():
                     spec = json.loads(spec_p.read_text())
-                    summary = spec.get("summary", "")
                     for nn in spec.get("non_negotiables", []):
                         all_non_negs.append(nn if isinstance(nn, str) else str(nn))
             except Exception:
                 pass
-            if summary:
-                header_lines.append(f"  [bold]{name}[/bold]")
-                header_lines.append(f"  [dim]{summary}[/dim]")
-            else:
-                header_lines.append(f"  [bold]{name}[/bold]")
 
         if all_non_negs:
             header_lines.append("")
             header_lines.append("[dim]key points:[/dim]")
             for nn in all_non_negs[:8]:
-                header_lines.append(f"  [red]🔒[/red] {nn}")
+                header_lines.append(f"  • {nn}")
     else:
         header_lines.append("[dim]no spec loaded — run /anchor:companion[/dim]")
 
@@ -1190,33 +1213,43 @@ def main():
                             else:
                                 live.update(build_chart(mini, loaded_modules))
 
-                            # Plan file detection → run impact analysis in background
-                            if mini.plan_file and not mini.impact:
-                                plan_path = event.get("file_path", "")
-                                if ".claude/plans/" in plan_path:
-                                    def _analyze_plan(m=mini, l=live, p=plan_path, lm=loaded_modules):
-                                        try:
-                                            cwd = event.get("cwd", os.getcwd())
-                                            content = Path(p).read_text()[:20000]
-                                            specs = load_all_specs(cwd, lm) if lm else {}
-                                            spec_ctx = json.dumps(
-                                                {n: {"summary": s.get("summary", ""), "business_rules": s.get("business_rules", []),
-                                                     "non_negotiables": s.get("non_negotiables", []), "tradeoffs": s.get("tradeoffs", [])}
-                                                 for n, s in specs.items()}, indent=2
-                                            ) if specs else "{}"
-                                            prompt = f"Canonical spec:\n{spec_ctx}\n\nPlan:\n{content}\n\nClassify each architectural decision."
-                                            raw = call_claude(prompt, PLAN_IMPACT_SYSTEM)
-                                            items = json.loads(raw) if raw else []
-                                            if isinstance(items, list):
-                                                m.impact = items
-                                                if l:
-                                                    try:
-                                                        l.update(build_chart(m, lm))
-                                                    except Exception:
-                                                        pass
-                                        except Exception as e:
-                                            log_error(f"Plan analysis error: {e}")
-                                    threading.Thread(target=_analyze_plan, daemon=True).start()
+                            # Plan file detection → run impact analysis inline
+                            # (stop Live, analyze, restart — avoids thread/Live conflicts)
+                            plan_path = event.get("file_path", "")
+                            is_plan = ".claude/plans/" in plan_path and plan_path.endswith(".md")
+                            if is_plan and not mini.impact:
+                                if live:
+                                    live.stop()
+                                    live = None
+                                console.print(f"[dim]{datetime.now().strftime('%H:%M:%S')} analyzing plan...[/dim]")
+                                try:
+                                    cwd = event.get("cwd", os.getcwd())
+                                    content = Path(plan_path).read_text()[:20000]
+                                    specs = load_all_specs(cwd, loaded_modules) if loaded_modules else {}
+                                    # Compact spec context — only what's needed for classification
+                                    compact = {}
+                                    for n, s in specs.items():
+                                        compact[n] = {
+                                            "summary": s.get("summary", "")[:200],
+                                            "business_rules": [r[:150] for r in s.get("business_rules", [])[:10]],
+                                            "non_negotiables": [r[:200] for r in s.get("non_negotiables", [])],
+                                        }
+                                    spec_ctx = json.dumps(compact, indent=2) if compact else "{}"
+                                    prompt = f"Canonical spec:\n{spec_ctx}\n\nPlan:\n{content}\n\nClassify each architectural decision."
+                                    raw = call_claude(prompt, PLAN_IMPACT_SYSTEM, timeout=300)
+                                    parsed = json.loads(raw) if raw else {}
+                                    if isinstance(parsed, dict):
+                                        mini.impact = parsed.get("items", [])
+                                        mini.status = parsed.get("summary", "")
+                                    elif isinstance(parsed, list):
+                                        # backwards compat if model returns array
+                                        mini.impact = parsed
+                                except Exception as e:
+                                    console.print(f"[red]  plan analysis error: {e}[/red]")
+                                    log_error(f"Plan analysis error: {e}")
+                                # Restart Live with updated chart
+                                live = Live(build_chart(mini, loaded_modules), console=console, refresh_per_second=4)
+                                live.start()
 
                         elif event_type == "stop":
                             stop_live()
@@ -1226,6 +1259,10 @@ def main():
                         elif event_type == "exit_plan_mode":
                             # Persist captures — analysis already happened on plan file write
                             threading.Thread(target=handle_exit_plan_mode, args=(event,), daemon=True).start()
+
+                        elif event_type == "refresh":
+                            if live and mini:
+                                live.update(build_chart(mini, loaded_modules))
 
                         elif event_type == "session_end":
                             stop_live()
