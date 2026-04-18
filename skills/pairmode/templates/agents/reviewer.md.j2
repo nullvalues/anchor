@@ -43,6 +43,10 @@ If yes and the story spec does not explicitly name the file with a reason: HIGH.
 Did the builder touch files outside the stated story scope?
 An unexplained out-of-scope change is MEDIUM.
 
+**{{ checklist_items | length + 3 }}. BUILD GATE**
+Does `{{ test_command }}` pass cleanly?
+A failing build gate blocks story completion regardless of checklist outcome. CRITICAL.
+
 ---
 
 ## Test run

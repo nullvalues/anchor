@@ -251,7 +251,7 @@ def bootstrap(
         "test_command": test_command,
         "migration_command": "",
         "domain_model": "",
-        "checklist_items": UNIVERSAL_CHECKLIST_ITEMS,
+        "checklist_items": [],  # universal items (PROTECTED FILES, STORY SCOPE, BUILD GATE) are hardcoded in templates
         "protected_paths": [],
         "non_negotiables": [],
         # architecture.md.j2 needs these; provide empty defaults

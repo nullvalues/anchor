@@ -314,10 +314,10 @@ def derive_checklist(modules: list[dict]) -> list[dict]:
 Deduplication: if the same rule text appears in multiple modules, merge them
 (list all module names in the `module` field).
 
-Universal items always appended at the end:
-1. PROTECTED FILES (HIGH) — "Were protected files modified without a stated reason?"
-2. STORY SCOPE (MEDIUM) — "Did the builder touch files outside the stated story scope?"
-3. BUILD GATE (HIGH) — "Does `{{ build_command }}` pass cleanly?"
+Universal items are NOT included in the `derive_checklist()` output. They are added by the
+templates themselves via hardcoded Jinja2 code. The deriver returns only spec-derived items
+(non-negotiables as CRITICAL, business rules as HIGH). The templates append PROTECTED FILES,
+STORY SCOPE, and BUILD GATE after the spec-derived items in every rendered output.
 
 Create `tests/pairmode/test_checklist_deriver.py`.
 
@@ -372,6 +372,10 @@ Update `skills/pairmode/scripts/bootstrap.py` to:
    `denylist_deriver.derive_denylist(modules, module_paths)`
 3. If no spec: use universal defaults
 4. Pass derived data to templates
+
+IMPORTANT: Pass only spec-derived items in `checklist_items`. Do NOT include universal items
+(PROTECTED FILES, STORY SCOPE, BUILD GATE) — the templates add those themselves via hardcoded
+Jinja2. Including them in `checklist_items` will cause duplication in rendered output.
 
 Also write `settings.deny-rationale.json` alongside `settings.json` in `.claude/`:
 ```json
