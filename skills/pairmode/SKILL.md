@@ -167,20 +167,64 @@ uv run python skills/pairmode/scripts/lesson.py \
 typically before a major bootstrap or sync campaign across projects.
 
 **Inputs expected:**
-- `anchor/lessons/lessons.json` — must exist with at least one `status: active` lesson.
-- User approval for each proposed template change.
+- `anchor/lessons/lessons.json` — must exist with at least one lesson with `status: captured`
+  or `status: reviewed`.
+- User approval or rejection for each proposed template change (handled via AskUserQuestion
+  in the skill; `lesson_review.py` provides the underlying logic).
 
 **What it does:**
-1. Loads all lessons with `status: active` from `anchor/lessons/lessons.json`.
-2. Groups lessons by their `affects` field to identify patterns across project types.
-3. For each group, proposes specific, minimal template updates that incorporate the learning.
-4. Presents each proposed change to the user with the source lesson(s) and rationale.
-5. Writes approved template updates to `skills/pairmode/templates/`.
-6. Updates the `status` of incorporated lessons to `incorporated` in `lessons.json`.
-7. Increments the canonical `pairmode_version` if any templates were updated.
+1. Calls `load_reviewable_lessons()` — loads all lessons with `status: captured` or
+   `status: reviewed` from `anchor/lessons/lessons.json`.
+2. Calls `group_lessons_by_affects()` — groups lessons by the `methodology_change.affects`
+   values. A lesson with `affects: ["all"]` appears under every known affects key
+   (`reviewer_checklist`, `builder_agent`, `orchestrator`, `checkpoint_sequence`).
+3. For each lesson, calls `propose_template_change()` to produce a proposal dict:
+   - `lesson_id` — the lesson's ID
+   - `affects` — the specific affects value for this proposal
+   - `template_file` — relative path to the template to edit (see mapping below)
+   - `description` — the methodology change description from the lesson
+   - `lesson_trigger` — copied from lesson for context
+   - `lesson_learning` — copied from lesson for context
+4. Presents each proposed change to the user (via AskUserQuestion) with the source
+   lesson and rationale.
+5. For approved lessons: calls `apply_template_change(proposal, change_text)` which
+   appends a Jinja2 comment block `{# LESSON <id>: <change_text> #}` to the template
+   file, then marks the lesson `status: applied`.
+6. For rejected lessons: marks the lesson `status: reviewed` (for future consideration).
+7. Calls `regenerate_lessons_md()` to write an updated `lessons/LESSONS.md`.
+
+**Affects → template file mapping:**
+
+| affects value         | template file                                         |
+|-----------------------|-------------------------------------------------------|
+| `reviewer_checklist`  | `skills/pairmode/templates/CLAUDE.md.j2`              |
+| `builder_agent`       | `skills/pairmode/templates/agents/builder.md.j2`      |
+| `orchestrator`        | `skills/pairmode/templates/CLAUDE.build.md.j2`        |
+| `checkpoint_sequence` | `skills/pairmode/templates/CLAUDE.build.md.j2`        |
+| `all`                 | all three template files (one proposal per file)      |
+
+**Template comment format written by `apply_template_change`:**
+```
+{# LESSON L001: <change_text> #}
+```
+This marks the location for the developer to implement the change manually. The comment
+is appended to the end of the template file.
+
+**CLI invocation (for direct use / automation):**
+```bash
+uv run python skills/pairmode/scripts/lesson_review.py \
+  --approve L001 \
+  --approve L002 \
+  --reject L003
+```
+- `--approve LESSON_ID` (repeatable): apply_template_change is called with the lesson's
+  own description as change_text, then status is set to `applied`.
+- `--reject LESSON_ID` (repeatable): status is set to `reviewed`.
+- After processing all flags, `regenerate_lessons_md()` is called automatically.
 
 **Outputs:**
-- Updated Jinja2 templates in `skills/pairmode/templates/`.
-- Updated `status` fields in `anchor/lessons/lessons.json`.
-- Updated canonical `pairmode_version`.
-- A review summary listing every change made.
+- Jinja2 comment blocks appended to affected template files in `skills/pairmode/templates/`.
+- Updated `status` fields in `anchor/lessons/lessons.json` (via `lesson_utils.save_lessons()`,
+  which enforces the append-only invariant).
+- `lessons/LESSONS.md` regenerated from the updated lessons store.
+- A review summary printed to stdout.
