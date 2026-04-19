@@ -134,6 +134,21 @@ Each module has one `spec.json` at `<spec_location>/openspec/specs/<module>/spec
 
 ---
 
+## Companion data files
+
+`.companion/product.json` contains a `config` key pointing to an external config file path.
+That config file contains `spec_location` — the path to the project's openspec directory.
+
+`spec_reader.read_project_spec(companion_dir)` follows this two-hop path automatically:
+1. Read `product.json["config"]` → path to external config file
+2. Read `config["spec_location"]` → openspec root directory
+3. Glob `<spec_location>/openspec/specs/*/spec.json` → all module specs
+
+Returns `None` if `product.json` is missing or has no `config` key. Returns a dict with
+`modules` (list of spec dicts) and `spec_location` (Path) if found.
+
+---
+
 ## Hook architecture
 
 **Non-negotiable: hooks are thin relays.**
