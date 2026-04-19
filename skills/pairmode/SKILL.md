@@ -102,24 +102,62 @@ changes into the project.
 **When to use:** At the end of a session (or any time) when a meaningful methodology insight has
 emerged — a workflow problem solved, a pattern discovered, a failure mode identified.
 
-**Inputs expected (prompted interactively):**
+**Inputs expected (prompted interactively via AskUserQuestion, or as CLI arguments):**
 - **trigger** — what situation or event prompted this lesson.
 - **problem** — what went wrong or was inefficient.
 - **learning** — the insight or corrective pattern.
 - **methodology_change** — how the methodology (templates, process, tooling) should change as
   a result.
-- **affects** — which project types or contexts this lesson applies to (used by audit to filter
-  relevant lessons).
+- **affects** — which components are affected (e.g. `reviewer_checklist`, `builder_agent`).
+- **applies_to** — which project types this applies to (e.g. `all`, `python`, `typescript`).
+- **source_project** — (optional) the project that produced this lesson; defaults to `unknown`.
 
 **What it does:**
-1. Prompts the user for each field.
-2. Constructs a lesson entry with a generated `id`, `date`, and `status: active`.
-3. Appends the entry to `anchor/lessons/lessons.json` (in the anchor repo, not the project).
-4. Lessons are append-only — existing entries are never modified except to update `status`.
+1. Loads the current `anchor/lessons/lessons.json`.
+2. Generates the next sequential lesson ID (L001, L002, …).
+3. Constructs a lesson entry with `id`, `date` (today), `source_project`, `trigger`, `problem`,
+   `learning`, `methodology_change` (with `affects` and `description`), `applies_to`, and
+   `status: captured`.
+4. Appends the entry to `anchor/lessons/lessons.json` via `lesson_utils.save_lessons()`, which
+   enforces the append-only invariant (existing entries may only have `status` changed).
+5. Calls `lesson_utils.generate_lessons_md()` and writes the result to `lessons/LESSONS.md`.
+6. Returns the captured lesson dict and prints a confirmation with the lesson `id`.
+
+**Lesson schema written to lessons.json:**
+```json
+{
+  "id": "L001",
+  "date": "YYYY-MM-DD",
+  "source_project": "project name or 'unknown'",
+  "trigger": "...",
+  "problem": "...",
+  "learning": "...",
+  "methodology_change": {
+    "affects": ["reviewer_checklist"],
+    "description": "..."
+  },
+  "applies_to": ["all"],
+  "status": "captured"
+}
+```
+
+**CLI invocation (for testing and direct use):**
+```bash
+uv run python skills/pairmode/scripts/lesson.py \
+  --trigger "Builder skipped tests" \
+  --problem "Tests failed after story was marked done." \
+  --learning "Always run tests before marking a story done." \
+  --methodology-change "Add test gate to builder checklist." \
+  --affects reviewer_checklist \
+  --affects builder_agent \
+  --applies-to all \
+  --source-project my-project
+```
 
 **Outputs:**
 - New entry appended to `anchor/lessons/lessons.json`.
-- Confirmation message with the lesson `id`.
+- `lessons/LESSONS.md` regenerated from the updated lessons store.
+- Confirmation message with the lesson `id` printed to stdout.
 
 ---
 
