@@ -89,27 +89,38 @@ RECOMMENDATION
 
 ### `/anchor:pairmode sync`
 
-**When to use:** After reviewing an audit report and deciding to incorporate upstream methodology
-changes into the project.
+**When to use:** Apply missing or inconsistent items from an audit result to bring a project's
+pairmode scaffold up to date with the current canonical methodology.
 
-**Inputs expected:**
-- Audit report from a preceding `/anchor:pairmode audit` run (or the user confirms a fresh audit
-  should be run first).
-- Target project root path.
-- User confirmation of which deltas to apply (all, or a selected subset).
+**Inputs:**
+- Current directory (used as project-dir)
+- Optional: project type tag for lesson filtering (defaults to "all")
 
 **What it does:**
-1. Runs (or reuses) an audit to identify deltas.
-2. For each selected delta, applies the canonical update to the project file while preserving
-   project-specific content in designated customisation zones (marked in templates with
-   `{# PROJECT_CUSTOM #}` blocks).
-3. Presents each proposed change to the user before writing.
-4. Writes approved changes and updates `pairmode_version` in `.companion/state.json`.
+1. Run audit to get current delta: `uv run python ${CLAUDE_SKILL_DIR}/scripts/audit.py --project-dir "$(pwd)"`
+2. Display the audit result
+3. If no MISSING or INCONSISTENT items: report "Already up to date" and stop
+4. Otherwise, confirm with user before applying changes
+5. Run: `uv run python ${CLAUDE_SKILL_DIR}/scripts/sync.py --project-dir "$(pwd)"`
+6. Display sync output
 
-**Outputs:**
-- Updated scaffold files in the target project.
-- Updated `pairmode_version` in `.companion/state.json`.
-- A sync summary listing every file changed.
+**Output format:**
+```
+SYNC COMPLETE — <project_name>
+
+Applied:
+  ✓ <description of each change>
+
+Preserved:
+  → <project-specific items kept>
+
+State updated: .companion/state.json
+```
+
+**What it never does:**
+- Never overwrites project-specific content (EXTRA items)
+- Never modifies hooks/ or spec files
+- Never runs without showing audit output first
 
 ---
 
