@@ -584,7 +584,7 @@ Audit logic:
    - EXTRA: project-specific items not in canonical (preserve these)
 
 ```python
-def audit_project(project_dir: Path) -> AuditResult:
+def audit_project(project_dir: Path, applies_to: str = "all") -> AuditResult:
     """
     Returns AuditResult with:
       missing: list[AuditItem]

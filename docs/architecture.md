@@ -187,6 +187,10 @@ and which projects it applies to. Lessons flow into templates via `/anchor:pairm
 **Template versioning:** Each pairmode-bootstrapped project records the `pairmode_version`
 it was bootstrapped with in `.companion/state.json`. `/anchor:pairmode audit` uses this to
 determine the delta between the project's methodology and the current canonical version.
+Audit compares section headers (structural presence of `##` headings) between project files
+and raw Jinja2 template source — it does not render templates before comparison. Section
+bodies in canonical templates contain Jinja2 variable expressions (`{{ project_name }}`
+etc.); body-level content comparison should not be relied upon for semantic drift detection.
 
 ### Pairmode non-negotiables
 
