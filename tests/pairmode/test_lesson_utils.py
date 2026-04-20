@@ -122,6 +122,21 @@ class TestAppendOnlyInvariant:
         with pytest.raises(ValueError):
             lu.save_lessons(bad)
 
+    def test_deletion_raises(self, lessons_file):
+        lu, _ = lessons_file
+        lu.save_lessons(_make_data(_make_lesson("L001"), _make_lesson("L002")))
+
+        # Omitting L001 from incoming data is a deletion attempt
+        with pytest.raises(ValueError, match="L001"):
+            lu.save_lessons(_make_data(_make_lesson("L002")))
+
+    def test_empty_incoming_raises_for_existing_lessons(self, lessons_file):
+        lu, _ = lessons_file
+        lu.save_lessons(_make_data(_make_lesson("L001")))
+
+        with pytest.raises(ValueError, match="L001"):
+            lu.save_lessons({"version": "1.0.0", "lessons": []})
+
 
 # ---------------------------------------------------------------------------
 # LESSONS.md generation

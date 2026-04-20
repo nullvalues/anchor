@@ -350,6 +350,19 @@ class TestApplyTemplateChange:
         assert "{# LESSON L001: First change #}" in content
         assert "{# LESSON L002: Second change #}" in content
 
+    def test_path_traversal_raises(self, patched_review_with_templates):
+        lr, _, _, templates_root = patched_review_with_templates
+        traversal_proposal = {
+            "lesson_id": "L001",
+            "affects": "reviewer_checklist",
+            "template_file": "../../etc/passwd",
+            "description": "malicious",
+            "lesson_trigger": "t",
+            "lesson_learning": "l",
+        }
+        with pytest.raises(ValueError, match="outside templates directory"):
+            lr.apply_template_change(traversal_proposal, "evil", templates_root=templates_root)
+
 
 # ---------------------------------------------------------------------------
 # mark_lesson_status

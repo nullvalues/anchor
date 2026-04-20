@@ -144,7 +144,12 @@ def apply_template_change(proposal: dict, change_text: str, templates_root: Path
         templates_root: Optional override for the anchor repo root (used in tests).
     """
     root = templates_root if templates_root is not None else _ANCHOR_ROOT
-    template_path = root / proposal["template_file"]
+    template_path = (root / proposal["template_file"]).resolve()
+    templates_boundary = (root / "skills" / "pairmode" / "templates").resolve()
+    if not str(template_path).startswith(str(templates_boundary)):
+        raise ValueError(
+            f"Template path {template_path} is outside templates directory"
+        )
     lesson_id = proposal["lesson_id"]
 
     comment_block = f"\n{{# LESSON {lesson_id}: {change_text} #}}\n"

@@ -22,6 +22,14 @@ def save_lessons(data: dict) -> None:
     existing = load_lessons()
     existing_by_id = {entry["id"]: entry for entry in existing.get("lessons", [])}
 
+    existing_ids = set(existing_by_id.keys())
+    incoming_ids = {entry.get("id") for entry in data.get("lessons", [])}
+    removed = existing_ids - incoming_ids
+    if removed:
+        raise ValueError(
+            f"Append-only violation: lessons {sorted(removed)} were removed from data"
+        )
+
     for entry in data.get("lessons", []):
         entry_id = entry.get("id")
         if entry_id in existing_by_id:
