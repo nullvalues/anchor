@@ -48,6 +48,11 @@ except ImportError:
 PIPE_PATH = "/tmp/companion.pipe"
 STATE_PATH = ".companion/state.json"
 
+# Allow importing story_context from the pairmode skill
+_ANCHOR_ROOT = Path(__file__).parent.parent.parent.parent
+if str(_ANCHOR_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ANCHOR_ROOT))
+
 console = Console()
 lock = threading.Lock()
 
@@ -1072,8 +1077,58 @@ def get_state() -> dict:
         return {}
 
 
+# ── Story context panel ────────────────────────────────────────────────────────
+
+# In-memory current story; updated on startup and on state_update events
+_current_story: dict | None = None
+
+
+def build_story_panel(story: dict) -> Panel:
+    """Build a Rich Panel showing the current story context.
+
+    Args:
+        story: The current_story dict from state.json.
+               Expected keys: ``id`` (required), ``title`` (optional),
+               ``set_at`` (optional ISO-8601 timestamp).
+
+    Returns:
+        A Rich Panel ready to print.
+    """
+    story_id = story.get("id", "")
+    title = story.get("title", "")
+    set_at = story.get("set_at", "")
+
+    # Format the display label: "Story 2.3 — Title" or just "Story 2.3"
+    if title:
+        label = f"Story {story_id} \u2014 {title}"
+    else:
+        label = f"Story {story_id}"
+
+    # Format started time: extract HH:MM from ISO timestamp if present
+    started = ""
+    if set_at:
+        try:
+            dt = datetime.fromisoformat(set_at)
+            started = dt.strftime("%H:%M")
+        except Exception:
+            started = set_at
+
+    lines = [f"  {label}"]
+    if started:
+        lines.append(f"  [dim]Started: {started}[/dim]")
+
+    return Panel(
+        "\n".join(lines),
+        title="[bold]Story[/bold]",
+        border_style="dim",
+        box=box.ROUNDED,
+    )
+
+
 def render_startup(state: dict):
     """Show the patient chart: loaded modules + non-negotiables (allergies)."""
+    global _current_story
+    _current_story = state.get("current_story")
     loaded_modules = state.get("last_loaded_modules", [])
 
     header_lines = []
@@ -1117,6 +1172,11 @@ def render_startup(state: dict):
             box=box.ROUNDED,
         )
     )
+
+    # Story context panel — only shown when current_story is set
+    if _current_story:
+        console.print(build_story_panel(_current_story))
+
     console.print()
 
 
@@ -1226,6 +1286,13 @@ def main():
                         elif event_type == "exit_plan_mode":
                             # Persist captures — analysis already happened on plan file write
                             threading.Thread(target=handle_exit_plan_mode, args=(event,), daemon=True).start()
+
+                        elif event_type == "state_update":
+                            # Refresh current_story from the event payload
+                            global _current_story
+                            _current_story = event.get("current_story")
+                            if _current_story:
+                                console.print(build_story_panel(_current_story))
 
                         elif event_type == "session_end":
                             stop_live()
