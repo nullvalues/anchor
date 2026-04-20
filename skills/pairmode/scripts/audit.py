@@ -175,15 +175,15 @@ def _load_applicable_lessons(applies_to: str) -> list[dict]:
 
 def _find_lesson_for_file(lessons: list[dict], file_path: str) -> str | None:
     """Return the first lesson ID whose methodology_change.affects matches *file_path*."""
-    # Determine simple file type from path (e.g. "CLAUDE.md" → "md", agents → "agent")
     for lesson in lessons:
         mc = lesson.get("methodology_change", {})
-        affects = mc.get("affects", "")
-        if not affects:
-            continue
-        # Check if the affects string mentions the file or a relevant keyword
-        if affects.lower() in file_path.lower() or file_path.lower() in affects.lower():
-            return lesson.get("id")
+        affects = mc.get("affects", [])
+        # affects may be a list (current schema) or legacy string
+        if isinstance(affects, str):
+            affects = [affects]
+        for affect in affects:
+            if affect.lower() in file_path.lower() or file_path.lower() in affect.lower():
+                return lesson.get("id")
     return None
 
 

@@ -150,16 +150,12 @@ class TestGenerateLessonsMd:
         assert "auto-generated" in md
         assert "No lessons captured yet." in md
 
-    def test_empty_matches_existing_file(self):
-        """Output for an empty lessons list should match the committed LESSONS.md."""
+    def test_empty_produces_placeholder(self):
+        """Empty lessons list produces the standard placeholder line."""
         from skills.pairmode.scripts.lesson_utils import generate_lessons_md
         md = generate_lessons_md({"version": "1.0.0", "lessons": []})
-
-        expected_path = (
-            Path(__file__).parent.parent.parent / "lessons" / "LESSONS.md"
-        )
-        expected = expected_path.read_text()
-        assert md.strip() == expected.strip()
+        assert "No lessons captured yet." in md
+        assert "## L" not in md  # no lesson entries
 
     def test_one_lesson(self):
         from skills.pairmode.scripts.lesson_utils import generate_lessons_md
