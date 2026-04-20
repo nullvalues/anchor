@@ -147,6 +147,38 @@ That config file contains `spec_location` — the path to the project's openspec
 Returns `None` if `product.json` is missing or has no `config` key. Returns a dict with
 `modules` (list of spec dicts) and `spec_location` (Path) if found.
 
+`.companion/state.json` is written by the companion skill on every session start. Schema:
+
+```json
+{
+  "pairmode_version": "1.0",
+  "last_loaded_modules": ["module-name"],
+  "current_story": {
+    "id": "2.3",
+    "title": "optional title",
+    "set_at": "2026-04-20T00:00:00+00:00"
+  }
+}
+```
+
+Fields:
+- `pairmode_version` — set by `/anchor:pairmode bootstrap`; the methodology version used
+  to scaffold the project. Read by `/anchor:pairmode audit` to compute the delta.
+- `last_loaded_modules` — updated on every companion session start; lists the module names
+  the user chose to load for that session.
+- `current_story` — **optional**; present only when pairmode is active and the user
+  confirmed which story they are working on. Contains `id` (required), optional `title`,
+  and `set_at` (UTC ISO-8601 timestamp). Absent when the user skips the prompt.
+
+Pairmode is considered active when `.claude/settings.deny-rationale.json` exists in the
+project root. The helper `skills/pairmode/scripts/story_context.py` provides:
+- `is_pairmode_active(project_dir)` — returns True when the deny-rationale file is present.
+- `set_current_story(companion_dir, story_id, title=None)` — writes the `current_story`
+  entry and returns the updated state dict.
+- `get_current_story(companion_dir)` — returns the `current_story` dict or None.
+- `clear_current_story(companion_dir)` — removes `current_story` from state.json.
+- `read_state(companion_dir)` / `write_state(companion_dir, state)` — low-level helpers.
+
 ---
 
 ## Hook architecture
