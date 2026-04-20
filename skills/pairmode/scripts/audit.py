@@ -177,7 +177,7 @@ def audit_project(project_dir: Path, applies_to: str = "all") -> AuditResult:
     Audits the project at project_dir against canonical pairmode templates.
     applies_to: project type for lesson filtering ("all", "python", "typescript", etc.)
     """
-    project_dir = Path(project_dir)
+    project_dir = Path(project_dir).resolve()
 
     # Read pairmode_version from .companion/state.json
     pairmode_version: str | None = None

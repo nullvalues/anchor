@@ -170,7 +170,7 @@ def sync_project(project_dir: Path, applies_to: str = "all") -> SyncResult:
     Never modifies EXTRA items.
     Returns SyncResult describing what was changed and what was preserved.
     """
-    project_dir = Path(project_dir)
+    project_dir = Path(project_dir).resolve()
     result = SyncResult(project_dir=project_dir)
 
     # Run audit to get the delta
