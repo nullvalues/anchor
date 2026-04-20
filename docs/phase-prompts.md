@@ -567,6 +567,12 @@ canonical templates + applicable lessons. Output matches the format defined in a
 
 Create `skills/pairmode/scripts/audit.py`.
 
+Import pattern: audit.py may call `lesson_utils.load_lessons()` directly. Use the same
+relative-import workaround already established in other pairmode scripts (sys.path insertion
+or PYTHONPATH). Do not introduce a new import pattern without aligning with lesson.py and
+bootstrap.py. The pattern is: at the top of the script, insert the anchor repo root into
+sys.path before importing sibling modules.
+
 Audit logic:
 1. Read project's `.companion/state.json` for `pairmode_version`
 2. Load canonical templates at current version

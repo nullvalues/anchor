@@ -195,6 +195,9 @@ determine the delta between the project's methodology and the current canonical 
 - The deny list generator must include an inline comment on each generated rule linking it to
   the non-negotiable that produced it.
 - Pairmode bootstrap must never overwrite existing project files without explicit user confirmation.
+- Pairmode scripts that import sibling modules must either (a) use `sys.path` insertion to add
+  the anchor repo root at import time, or (b) be invoked with `PYTHONPATH` set to the anchor
+  repo root. SKILL.md invocations must document the required `PYTHONPATH` prefix.
 
 ---
 
