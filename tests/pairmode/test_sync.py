@@ -305,3 +305,178 @@ class TestExtraItemsNeverModified:
         # (we can only check it's not being wrongly applied)
         assert isinstance(result.applied, list)
         assert isinstance(result.preserved, list)
+
+
+# ---------------------------------------------------------------------------
+# Story 4.5 edge-case tests
+# ---------------------------------------------------------------------------
+
+
+class TestSyncIdempotency:
+    """Running sync twice produces the same result — second run has nothing to apply."""
+
+    def test_second_sync_applies_nothing(self, tmp_path: Path) -> None:
+        # First sync on empty project — will create all missing files
+        sync_project(tmp_path)
+
+        # Second sync — files now exist and match canonical, nothing to apply
+        result2 = sync_project(tmp_path)
+
+        assert result2.applied == [], (
+            f"Second sync should apply nothing, but applied: {result2.applied}"
+        )
+
+    def test_second_sync_state_matches_first(self, tmp_path: Path) -> None:
+        """State after second sync should have same pairmode_version as after first."""
+        sync_project(tmp_path)
+        result2 = sync_project(tmp_path)
+
+        state = json.loads(
+            (tmp_path / ".companion" / "state.json").read_text(encoding="utf-8")
+        )
+        assert state["pairmode_version"] == result2.pairmode_version
+
+    def test_second_sync_files_unchanged(self, tmp_path: Path) -> None:
+        """File contents after first and second sync should be identical."""
+        sync_project(tmp_path)
+        claude_md_after_first = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
+
+        sync_project(tmp_path)
+        claude_md_after_second = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
+
+        assert claude_md_after_first == claude_md_after_second, (
+            "CLAUDE.md contents changed on second sync — sync is not idempotent"
+        )
+
+
+class TestSyncNoPairmodeVersionInState:
+    """state.json exists but has no pairmode_version key → pairmode_version is None before sync, sync still works."""
+
+    def test_pairmode_version_none_before_sync(self, tmp_path: Path) -> None:
+        """Before sync, audit sees no pairmode_version."""
+        from skills.pairmode.scripts.audit import audit_project
+
+        _write_state(tmp_path)  # writes state.json with no extra fields
+        _copy_canonical_files(tmp_path)
+
+        audit_result = audit_project(tmp_path)
+        assert audit_result.pairmode_version is None
+
+    def test_sync_succeeds_without_pairmode_version(self, tmp_path: Path) -> None:
+        """Sync should not raise when state.json has no pairmode_version."""
+        _write_state(tmp_path)  # no pairmode_version key
+        _copy_canonical_files(tmp_path)
+
+        # Should not raise
+        result = sync_project(tmp_path)
+        assert isinstance(result, SyncResult)
+
+    def test_sync_writes_pairmode_version_to_state(self, tmp_path: Path) -> None:
+        """After sync, state.json should have pairmode_version even if it was absent before."""
+        _write_state(tmp_path)  # no pairmode_version key
+        _copy_canonical_files(tmp_path)
+
+        sync_project(tmp_path)
+
+        state = json.loads(
+            (tmp_path / ".companion" / "state.json").read_text(encoding="utf-8")
+        )
+        assert "pairmode_version" in state
+        assert state["pairmode_version"] == "0.1.0"
+
+
+class TestSyncCreatesMissingClaudeMd:
+    """When CLAUDE.md doesn't exist, sync creates it from canonical."""
+
+    def test_sync_creates_claude_md(self, tmp_path: Path) -> None:
+        # All canonical files except CLAUDE.md
+        for dest_rel, template_rel in CANONICAL_FILES:
+            if dest_rel == "CLAUDE.md":
+                continue
+            template_path = TEMPLATES_DIR / template_rel
+            dest_path = tmp_path / dest_rel
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            if template_path.exists():
+                dest_path.write_text(template_path.read_text(encoding="utf-8"), encoding="utf-8")
+            else:
+                dest_path.write_text("# placeholder\n", encoding="utf-8")
+
+        assert not (tmp_path / "CLAUDE.md").exists()
+
+        sync_project(tmp_path)
+
+        assert (tmp_path / "CLAUDE.md").exists(), "sync should create CLAUDE.md"
+
+    def test_created_claude_md_has_non_empty_content(self, tmp_path: Path) -> None:
+        sync_project(tmp_path)
+
+        content = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
+        assert len(content.strip()) > 0, "Created CLAUDE.md should not be empty"
+
+    def test_applied_records_claude_md_creation(self, tmp_path: Path) -> None:
+        result = sync_project(tmp_path)
+
+        applied_text = " ".join(result.applied)
+        assert "CLAUDE.md" in applied_text, (
+            f"CLAUDE.md creation should appear in applied list, got: {result.applied}"
+        )
+
+
+class TestSyncPreservesProjectSpecificSections:
+    """Project-specific checklist items / extra sections survive sync."""
+
+    def test_extra_section_text_preserved_after_sync(self, tmp_path: Path) -> None:
+        _copy_canonical_files(tmp_path)
+
+        claude_md = tmp_path / "CLAUDE.md"
+        original = claude_md.read_text(encoding="utf-8")
+        unique_text = "UNIQUE_MARKER_XYZ: do not remove this line"
+        claude_md.write_text(
+            original + f"\n## Project Checklist\n\n{unique_text}\n",
+            encoding="utf-8",
+        )
+
+        sync_project(tmp_path)
+
+        updated = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
+        assert unique_text in updated, (
+            "Project-specific section content was removed by sync"
+        )
+
+    def test_extra_section_heading_preserved_after_sync(self, tmp_path: Path) -> None:
+        _copy_canonical_files(tmp_path)
+
+        claude_md = tmp_path / "CLAUDE.md"
+        original = claude_md.read_text(encoding="utf-8")
+        claude_md.write_text(
+            original + "\n## Project Checklist\n\nSome checklist items.\n",
+            encoding="utf-8",
+        )
+
+        sync_project(tmp_path)
+
+        updated = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
+        assert "## Project Checklist" in updated, (
+            "Project-specific section heading was removed by sync"
+        )
+
+    def test_extra_sections_appear_in_preserved_list(self, tmp_path: Path) -> None:
+        _copy_canonical_files(tmp_path)
+
+        claude_md = tmp_path / "CLAUDE.md"
+        original = claude_md.read_text(encoding="utf-8")
+        claude_md.write_text(
+            original + "\n## Project Checklist\n\nSome checklist items.\n",
+            encoding="utf-8",
+        )
+
+        result = sync_project(tmp_path)
+
+        # The extra section should be preserved, not applied
+        assert len(result.preserved) > 0, (
+            "Expected project-specific sections in preserved list"
+        )
+        preserved_text = " ".join(result.preserved)
+        assert "CLAUDE.md" in preserved_text, (
+            "Expected CLAUDE.md in preserved list"
+        )

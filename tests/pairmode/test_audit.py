@@ -269,3 +269,171 @@ class TestNoCompanionStateJson:
         # Should not raise
         result = audit_project(tmp_path)
         assert isinstance(result, AuditResult)
+
+
+# ---------------------------------------------------------------------------
+# Story 4.5 edge-case tests
+# ---------------------------------------------------------------------------
+
+
+class TestAuditClaudeMdFewerSections:
+    """CLAUDE.md exists but has fewer sections than canonical → missing sections in MISSING."""
+
+    def test_missing_sections_appear_in_missing_list(self, tmp_path: Path) -> None:
+        """Write a CLAUDE.md that only has the preamble — all canonical sections are absent."""
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+
+        # Replace CLAUDE.md with a stub that has only a preamble and one section
+        stub = "# Project context\n\nThis is a minimal CLAUDE.md with just a preamble.\n"
+        (tmp_path / "CLAUDE.md").write_text(stub, encoding="utf-8")
+
+        result = audit_project(tmp_path)
+
+        # The canonical template has multiple sections; at least some must be MISSING
+        claude_md_missing = [i for i in result.missing if i.file == "CLAUDE.md"]
+        assert len(claude_md_missing) > 0, (
+            "Expected MISSING items for CLAUDE.md sections absent from the project file"
+        )
+
+    def test_sections_present_in_project_are_not_missing(self, tmp_path: Path) -> None:
+        """Sections that DO appear in the project file should not be reported as MISSING."""
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+
+        # The canonical CLAUDE.md — read the first real header from it
+        canonical_text = (
+            _audit_mod.TEMPLATES_DIR / "CLAUDE.md.j2"
+        ).read_text(encoding="utf-8")
+
+        # Find a header that exists in the canonical template
+        import re
+        headers = re.findall(r"^## .+", canonical_text, re.MULTILINE)
+        assert headers, "Canonical CLAUDE.md.j2 should have at least one ## header"
+
+        # Build a stub that contains just this one header/section
+        first_header = headers[0]
+        stub = f"{first_header}\n\nSome content.\n"
+        (tmp_path / "CLAUDE.md").write_text(stub, encoding="utf-8")
+
+        result = audit_project(tmp_path)
+
+        # The section corresponding to this header should NOT be in missing
+        # (it may be in inconsistent because the body differs — that's OK)
+        from skills.pairmode.scripts.audit import _normalise
+        normalised_header = _normalise(first_header)
+        missing_keys = {i.section for i in result.missing if i.file == "CLAUDE.md"}
+        assert normalised_header not in missing_keys, (
+            f"Section '{normalised_header}' is present in project but appears in MISSING"
+        )
+
+
+class TestAuditExtraCustomSections:
+    """Project CLAUDE.md has extra custom sections not in canonical → appear in EXTRA."""
+
+    def test_extra_sections_appear_in_extra_list(self, tmp_path: Path) -> None:
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+
+        # Append a custom section that is not in any canonical template
+        claude_md = tmp_path / "CLAUDE.md"
+        existing = claude_md.read_text(encoding="utf-8")
+        claude_md.write_text(
+            existing + "\n## My Unique Project Section\n\nProject-specific notes here.\n",
+            encoding="utf-8",
+        )
+
+        result = audit_project(tmp_path)
+
+        extra_files = [i.file for i in result.extra]
+        assert "CLAUDE.md" in extra_files, (
+            f"Expected CLAUDE.md in extra items, got: {extra_files}"
+        )
+
+    def test_extra_section_key_is_in_extra_list(self, tmp_path: Path) -> None:
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+
+        from skills.pairmode.scripts.audit import _normalise
+        custom_header = "## My Unique Project Section"
+        normalised_custom = _normalise(custom_header)
+
+        claude_md = tmp_path / "CLAUDE.md"
+        existing = claude_md.read_text(encoding="utf-8")
+        claude_md.write_text(
+            existing + f"\n{custom_header}\n\nProject-specific notes here.\n",
+            encoding="utf-8",
+        )
+
+        result = audit_project(tmp_path)
+
+        extra_sections = {i.section for i in result.extra if i.file == "CLAUDE.md"}
+        assert normalised_custom in extra_sections, (
+            f"Expected '{normalised_custom}' in extra sections, got: {extra_sections}"
+        )
+
+    def test_extra_sections_do_not_appear_in_missing(self, tmp_path: Path) -> None:
+        """Custom project sections should not be mistakenly flagged as MISSING."""
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+
+        claude_md = tmp_path / "CLAUDE.md"
+        existing = claude_md.read_text(encoding="utf-8")
+        claude_md.write_text(
+            existing + "\n## My Unique Project Section\n\nProject-specific notes here.\n",
+            encoding="utf-8",
+        )
+
+        result = audit_project(tmp_path)
+
+        from skills.pairmode.scripts.audit import _normalise
+        normalised_custom = _normalise("## My Unique Project Section")
+        missing_keys = {i.section for i in result.missing}
+        assert normalised_custom not in missing_keys, (
+            "Custom project section should not appear in MISSING"
+        )
+
+
+class TestAuditVersionMismatch:
+    """pairmode_version in state.json doesn't match canonical → audit still runs, mismatch captured."""
+
+    def test_audit_runs_with_version_mismatch(self, tmp_path: Path) -> None:
+        _write_state(tmp_path, version="0.0.1")  # older version than canonical 0.1.0
+        _copy_canonical_files(tmp_path)
+
+        # Should not raise
+        result = audit_project(tmp_path)
+
+        assert isinstance(result, AuditResult)
+
+    def test_project_version_captured_in_result(self, tmp_path: Path) -> None:
+        _write_state(tmp_path, version="0.0.1")
+        _copy_canonical_files(tmp_path)
+
+        result = audit_project(tmp_path)
+
+        assert result.pairmode_version == "0.0.1", (
+            f"Expected pairmode_version='0.0.1', got: {result.pairmode_version}"
+        )
+
+    def test_canonical_version_is_always_current(self, tmp_path: Path) -> None:
+        _write_state(tmp_path, version="0.0.1")
+        _copy_canonical_files(tmp_path)
+
+        result = audit_project(tmp_path)
+
+        assert result.canonical_version == "0.1.0", (
+            f"Expected canonical_version='0.1.0', got: {result.canonical_version}"
+        )
+
+    def test_version_mismatch_does_not_add_spurious_missing_items(self, tmp_path: Path) -> None:
+        """A version mismatch alone should not cause files to appear missing when all files exist."""
+        _write_state(tmp_path, version="0.0.1")
+        _copy_canonical_files(tmp_path)
+
+        result = audit_project(tmp_path)
+
+        # Files are all present and identical so nothing should be MISSING
+        assert result.missing == [], (
+            f"Version mismatch alone should not produce MISSING items; got: {result.missing}"
+        )
