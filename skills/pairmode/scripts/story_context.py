@@ -88,3 +88,25 @@ def get_current_story(companion_dir: Path) -> dict | None:
     """Return the current_story dict from state.json, or None if not set."""
     state = read_state(companion_dir)
     return state.get("current_story")
+
+
+def match_file_to_module(file_path: str, modules: list[dict]) -> str | None:
+    """Return the module name whose paths contain the given file path as a prefix.
+
+    Iterates over each module entry in *modules* (list of dicts with ``name``
+    and ``paths`` keys).  A module matches when any of its ``paths`` entries is
+    a prefix of *file_path* (simple string prefix matching, no filesystem ops).
+
+    Args:
+        file_path: Absolute or relative path of the file that was changed.
+        modules: List of module dicts, each with ``name`` (str) and ``paths``
+                 (list[str]) keys, as found in ``.companion/modules.json``.
+
+    Returns:
+        The module name if a match is found, otherwise ``None``.
+    """
+    for module in modules:
+        for path in module.get("paths", []):
+            if file_path.startswith(path):
+                return module.get("name")
+    return None

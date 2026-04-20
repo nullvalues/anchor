@@ -11,6 +11,7 @@ from skills.pairmode.scripts.story_context import (
     clear_current_story,
     get_current_story,
     is_pairmode_active,
+    match_file_to_module,
     read_state,
     set_current_story,
     write_state,
@@ -225,6 +226,63 @@ class TestCurrentStorySchemaRoundTrip:
         assert "set_at" in story
         # Verify it can be serialised back to JSON without error
         assert json.dumps(reread)
+
+# ---------------------------------------------------------------------------
+# match_file_to_module
+# ---------------------------------------------------------------------------
+
+class TestMatchFileToModule:
+    def _modules(self):
+        return [
+            {"name": "auth-and-security", "description": "Auth", "paths": ["src/auth/"]},
+            {"name": "decision-ledger", "description": "Ledger", "paths": ["src/ledger/", "lib/ledger/"]},
+            {"name": "billing", "description": "Billing", "paths": ["src/billing/"]},
+        ]
+
+    def test_returns_module_name_for_exact_prefix_match(self):
+        modules = self._modules()
+        assert match_file_to_module("src/auth/views.py", modules) == "auth-and-security"
+
+    def test_returns_module_name_for_nested_path(self):
+        modules = self._modules()
+        assert match_file_to_module("src/ledger/models/account.py", modules) == "decision-ledger"
+
+    def test_returns_module_name_for_second_path_entry(self):
+        modules = self._modules()
+        assert match_file_to_module("lib/ledger/util.py", modules) == "decision-ledger"
+
+    def test_returns_none_when_no_module_matches(self):
+        modules = self._modules()
+        assert match_file_to_module("src/unrelated/file.py", modules) is None
+
+    def test_returns_none_for_empty_modules_list(self):
+        assert match_file_to_module("src/auth/views.py", []) is None
+
+    def test_returns_none_for_empty_file_path(self):
+        modules = self._modules()
+        assert match_file_to_module("", modules) is None
+
+    def test_does_not_match_partial_directory_name(self):
+        # "src/auth" should NOT match "src/authorize/views.py" if module path is "src/auth/"
+        modules = [{"name": "auth-and-security", "paths": ["src/auth/"]}]
+        # "src/authorize/views.py" does not start with "src/auth/" — no match
+        assert match_file_to_module("src/authorize/views.py", modules) is None
+
+    def test_matches_first_module_when_multiple_could_match(self):
+        # Module list order determines which wins — first match wins
+        modules = [
+            {"name": "first", "paths": ["src/"]},
+            {"name": "second", "paths": ["src/auth/"]},
+        ]
+        assert match_file_to_module("src/auth/views.py", modules) == "first"
+
+    def test_module_with_no_paths_key_is_skipped(self):
+        modules = [
+            {"name": "no-paths"},
+            {"name": "auth-and-security", "paths": ["src/auth/"]},
+        ]
+        assert match_file_to_module("src/auth/views.py", modules) == "auth-and-security"
+
 
     def test_state_json_schema_includes_last_loaded_modules(self, tmp_path):
         companion = make_companion_dir(tmp_path)

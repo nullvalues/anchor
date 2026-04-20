@@ -122,6 +122,9 @@ class MiniSession:
 
 _modules_cache = None
 
+# Session-level module boundary tracking
+_touched_modules: set[str] = set()
+
 
 def get_file_module(file_path: str, cwd: str) -> str | None:
     """Map a file path to its owning module using .companion/modules.json."""
@@ -136,6 +139,45 @@ def get_file_module(file_path: str, cwd: str) -> str | None:
             if path.rstrip("/") in file_path:
                 return module["name"]
     return None
+
+
+def _load_modules_list(cwd: str) -> list[dict]:
+    """Load the modules list from .companion/modules.json, returning [] on error."""
+    global _modules_cache
+    if _modules_cache is None:
+        try:
+            _modules_cache = json.loads((Path(cwd) / ".companion" / "modules.json").read_text())
+        except Exception:
+            _modules_cache = []
+    return _modules_cache
+
+
+def track_module_boundary(file_path: str, cwd: str) -> bool:
+    """Record which module a changed file belongs to.
+
+    Uses prefix matching against modules.json paths.  Returns True if a
+    multi-module boundary alert should be shown (i.e. files from more than one
+    module have been touched this session AND current_story is set).
+    """
+    global _touched_modules
+    modules = _load_modules_list(cwd)
+
+    matched: str | None = None
+    for module in modules:
+        for path in module.get("paths", []):
+            if file_path.startswith(path):
+                matched = module.get("name")
+                break
+        if matched:
+            break
+
+    if matched:
+        _touched_modules.add(matched)
+
+    # Only alert when multiple modules touched and current_story is set
+    if len(_touched_modules) > 1 and _current_story:
+        return True
+    return False
 
 
 def build_chart(mini: MiniSession, loaded_modules: list[str]) -> Panel:
@@ -884,6 +926,16 @@ def handle_post_tool_use(event: dict):
 
     if not file_path:
         return
+
+    # Track module boundaries and emit a warning when multiple modules touched
+    multi_module = track_module_boundary(file_path, cwd)
+    if multi_module:
+        sorted_modules = sorted(_touched_modules)
+        modules_str = ", ".join(sorted_modules)
+        console.print(
+            f"  [yellow]\u26a0 Multi-module: {modules_str}[/yellow]\n"
+            "  [dim]Story scope may be exceeded[/dim]"
+        )
 
     alert = check_file_against_spec(file_path, cwd, loaded_modules)
     render_implementation(file_path, alert)

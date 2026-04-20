@@ -45,6 +45,8 @@ def main():
             json.dumps(
                 {
                     "event": "post_tool_use",
+                    "type": "file_changed",
+                    "path": file_path,
                     "tool": tool_name,
                     "file_path": file_path,
                     "loaded_modules": loaded_modules,
