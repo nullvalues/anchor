@@ -919,6 +919,60 @@ def handle_stop(event: dict):
     render_planning(ts, new_items, new_conflicts)
 
 
+def display_override_prompt(event: dict) -> None:
+    """Display a protected-file override capture prompt.
+
+    Asks the developer for a reason.  If a reason is given, writes a
+    ``spec_exception`` pipe message.  If the user presses *s* (or enters an
+    empty string), no record is written.
+    """
+    file_path = event.get("file_path", event.get("path", ""))
+    non_negotiable = event.get("non_negotiable", "")
+    protection_rule = event.get("protection_rule", "")
+    session_id = event.get("session_id", "")
+    cwd = event.get("cwd", os.getcwd())
+
+    short_path = Path(file_path).name if file_path else file_path
+
+    console.print(
+        Panel(
+            f"  [bold]{short_path}[/bold] was modified\n"
+            f"  [dim]Rule:[/dim] {non_negotiable or protection_rule}\n\n"
+            "  [bold]Reason for override (or press s to skip):[/bold]",
+            title="[bold yellow]Protected File Override[/bold yellow]",
+            border_style="yellow",
+            box=box.ROUNDED,
+        )
+    )
+
+    try:
+        reason = input().strip()
+    except EOFError:
+        reason = ""
+
+    if not reason or reason.lower() == "s":
+        console.print("[dim]  → skipped[/dim]")
+        return
+
+    # Write spec_exception to the pipe
+    try:
+        fd = os.open(PIPE_PATH, os.O_WRONLY | os.O_NONBLOCK)
+        msg = json.dumps(
+            {
+                "type": "spec_exception",
+                "path": file_path,
+                "non_negotiable": non_negotiable,
+                "override_reason": reason,
+                "session_id": session_id,
+            }
+        ) + "\n"
+        os.write(fd, msg.encode())
+        os.close(fd)
+        console.print(f"[dim]  → override reason recorded[/dim]")
+    except (OSError, BlockingIOError):
+        console.print("[yellow]  → could not write to pipe[/yellow]")
+
+
 def handle_post_tool_use(event: dict):
     file_path = event.get("file_path", "")
     loaded_modules = event.get("loaded_modules", [])
@@ -926,6 +980,10 @@ def handle_post_tool_use(event: dict):
 
     if not file_path:
         return
+
+    # Protected file override capture
+    if event.get("protected"):
+        display_override_prompt(event)
 
     # Track module boundaries and emit a warning when multiple modules touched
     multi_module = track_module_boundary(file_path, cwd)
@@ -1350,6 +1408,14 @@ def main():
                             stop_live()
                             console.print(f"[dim]{datetime.now().strftime('%H:%M:%S')} ← session ending...[/dim]")
                             threading.Thread(target=handle_session_end, args=(event,), daemon=True).start()
+
+                        # spec_exception has type= (not event=) — persist it
+                        if event.get("type") == "spec_exception":
+                            session_id = event.get("session_id", "")
+                            persist_capture(event, session_id)
+                            console.print(
+                                f"[dim]  → spec exception persisted: {Path(event.get('path', '')).name}[/dim]"
+                            )
 
                     except json.JSONDecodeError:
                         continue
