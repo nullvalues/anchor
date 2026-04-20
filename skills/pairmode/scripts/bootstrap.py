@@ -320,6 +320,32 @@ def bootstrap(
         _write_file(dest, content, dry_run=dry_run)
 
     # ------------------------------------------------------------------
+    # 4.5. Save template context for audit/sync rendering
+    # ------------------------------------------------------------------
+    context_path = project_path / ".companion" / "pairmode_context.json"
+    serialisable_context = {
+        "project_name": context["project_name"],
+        "project_description": context["project_description"],
+        "stack": context["stack"],
+        "build_command": context["build_command"],
+        "test_command": context["test_command"],
+        "migration_command": context["migration_command"],
+        "domain_model": context["domain_model"],
+        "domain_isolation_rule": context["domain_isolation_rule"],
+        "checklist_items": context["checklist_items"],
+        "protected_paths": context["protected_paths"],
+        "non_negotiables": context["non_negotiables"],
+        "module_structure": context["module_structure"],
+        "layer_rules": context["layer_rules"],
+    }
+    if dry_run:
+        click.echo(f"  [dry-run] would save template context to: {context_path}")
+    else:
+        context_path.parent.mkdir(parents=True, exist_ok=True)
+        context_path.write_text(json.dumps(serialisable_context, indent=2) + "\n", encoding="utf-8")
+        click.echo(f"Saving template context to {context_path}")
+
+    # ------------------------------------------------------------------
     # 5. Merge deny list into .claude/settings.json
     # ------------------------------------------------------------------
     settings_path = project_path / ".claude" / "settings.json"

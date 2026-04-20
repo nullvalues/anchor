@@ -623,3 +623,53 @@ class TestDenyRationaleJson:
             catch_exceptions=False,
         )
         assert not (tmp_path / ".claude" / "settings.deny-rationale.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# pairmode_context.json tests
+# ---------------------------------------------------------------------------
+
+class TestPairmodeContextJson:
+    """bootstrap writes .companion/pairmode_context.json with the template context."""
+
+    def test_context_file_created(self, tmp_path):
+        run_bootstrap(tmp_path)
+        context_path = tmp_path / ".companion" / "pairmode_context.json"
+        assert context_path.exists(), "pairmode_context.json should be created"
+
+    def test_context_file_has_project_name(self, tmp_path):
+        run_bootstrap(tmp_path)
+        data = json.loads((tmp_path / ".companion" / "pairmode_context.json").read_text())
+        assert data["project_name"] == "testproject"
+
+    def test_context_file_has_stack(self, tmp_path):
+        run_bootstrap(tmp_path)
+        data = json.loads((tmp_path / ".companion" / "pairmode_context.json").read_text())
+        assert data["stack"] == "Python / pytest"
+
+    def test_context_file_has_required_keys(self, tmp_path):
+        run_bootstrap(tmp_path)
+        data = json.loads((tmp_path / ".companion" / "pairmode_context.json").read_text())
+        required_keys = [
+            "project_name", "project_description", "stack", "build_command",
+            "test_command", "migration_command", "domain_model", "domain_isolation_rule",
+            "checklist_items", "protected_paths", "non_negotiables",
+            "module_structure", "layer_rules",
+        ]
+        for key in required_keys:
+            assert key in data, f"pairmode_context.json missing key: {key}"
+
+    def test_dry_run_does_not_write_context_file(self, tmp_path):
+        runner = CliRunner()
+        runner.invoke(
+            bootstrap,
+            [
+                "--project-dir", str(tmp_path),
+                "--project-name", "testproject",
+                "--stack", "Python / pytest",
+                "--build-command", "uv run pytest",
+                "--dry-run",
+            ],
+            catch_exceptions=False,
+        )
+        assert not (tmp_path / ".companion" / "pairmode_context.json").exists()

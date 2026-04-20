@@ -12,6 +12,8 @@ from skills.pairmode.scripts.audit import (
     AuditResult,
     audit_project,
     format_audit_output,
+    _load_project_context,
+    _JINJA_ENV,
 )
 from skills.pairmode.scripts import audit as _audit_mod
 
@@ -34,15 +36,20 @@ def _write_state(project_dir: Path, version: str | None = "0.1.0") -> None:
 
 
 def _copy_canonical_files(project_dir: Path) -> None:
-    """Copy all canonical template files (raw .j2 content) into project_dir."""
+    """Render all canonical template files with fallback context and write into project_dir.
+
+    Uses the same context that audit_project would use when pairmode_context.json is absent,
+    so that rendered canonical == rendered template and no false INCONSISTENT is produced.
+    """
+    context = _load_project_context(project_dir)
     for dest_rel, template_rel in CANONICAL_FILES:
-        template_path = TEMPLATES_DIR / template_rel
         dest_path = project_dir / dest_rel
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        if template_path.exists():
-            dest_path.write_text(template_path.read_text(encoding="utf-8"), encoding="utf-8")
-        else:
-            dest_path.write_text("# placeholder\n", encoding="utf-8")
+        try:
+            rendered = _JINJA_ENV.get_template(template_rel).render(**context)
+        except Exception:
+            rendered = "# placeholder\n"
+        dest_path.write_text(rendered, encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -437,3 +444,86 @@ class TestAuditVersionMismatch:
         assert result.missing == [], (
             f"Version mismatch alone should not produce MISSING items; got: {result.missing}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Context rendering tests
+# ---------------------------------------------------------------------------
+
+
+class TestAuditRendersTemplateWithContext:
+    """audit_project reads pairmode_context.json and renders templates before comparing."""
+
+    def test_no_false_inconsistent_when_context_matches(self, tmp_path: Path) -> None:
+        """When pairmode_context.json is present and project files were rendered from it,
+        audit should report no INCONSISTENT items for project_name substitution."""
+        import json as _json
+        from click.testing import CliRunner
+        from skills.pairmode.scripts.bootstrap import bootstrap
+
+        # Bootstrap the project (writes pairmode_context.json and rendered files)
+        runner = CliRunner()
+        result = runner.invoke(
+            bootstrap,
+            [
+                "--project-dir", str(tmp_path),
+                "--project-name", "cora",
+                "--stack", "Python / FastAPI",
+                "--build-command", "uv run pytest",
+            ],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0, result.output
+
+        # pairmode_context.json must exist
+        context_path = tmp_path / ".companion" / "pairmode_context.json"
+        assert context_path.exists()
+
+        # Audit should not flag INCONSISTENT because rendered canonical == project files
+        audit_result = audit_project(tmp_path)
+
+        inconsistent_files = [i.file for i in audit_result.inconsistent]
+        assert inconsistent_files == [], (
+            f"Expected no INCONSISTENT items after clean bootstrap, got: {audit_result.inconsistent}"
+        )
+
+    def test_context_project_name_used_in_rendered_canonical(self, tmp_path: Path) -> None:
+        """When pairmode_context.json has project_name='cora', canonical sections
+        contain 'cora' after rendering, not '{{ project_name }}'."""
+        import json as _json
+
+        companion = tmp_path / ".companion"
+        companion.mkdir(parents=True, exist_ok=True)
+        ctx = {
+            "project_name": "cora",
+            "project_description": "a test project",
+            "stack": "Python",
+            "build_command": "uv run pytest",
+            "test_command": "uv run pytest",
+            "migration_command": "",
+            "domain_model": "",
+            "domain_isolation_rule": "",
+            "checklist_items": [],
+            "protected_paths": [],
+            "non_negotiables": [],
+            "module_structure": [],
+            "layer_rules": [],
+        }
+        (companion / "pairmode_context.json").write_text(
+            _json.dumps(ctx), encoding="utf-8"
+        )
+
+        # Read what audit will produce for canonical CLAUDE.md sections
+        from skills.pairmode.scripts.audit import _read_template_sections, _load_project_context
+        loaded_ctx = _load_project_context(tmp_path)
+        assert loaded_ctx["project_name"] == "cora"
+
+        sections = _read_template_sections("CLAUDE.md.j2", loaded_ctx)
+        # All section bodies should not contain raw Jinja2 syntax
+        for key, body in sections.items():
+            assert "{{" not in body, (
+                f"Section '{key}' still contains Jinja2 syntax after rendering: {body[:100]}"
+            )
+        # At least some section should mention 'cora'
+        all_text = " ".join(sections.values())
+        assert "cora" in all_text, "Rendered CLAUDE.md canonical should contain 'cora'"

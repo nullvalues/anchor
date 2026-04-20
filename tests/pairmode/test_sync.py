@@ -13,6 +13,7 @@ from skills.pairmode.scripts.sync import (
     format_sync_output,
 )
 from skills.pairmode.scripts import audit as _audit_mod
+from skills.pairmode.scripts.audit import _load_project_context, _JINJA_ENV
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -23,15 +24,20 @@ CANONICAL_FILES = _audit_mod.CANONICAL_FILES
 
 
 def _copy_canonical_files(project_dir: Path) -> None:
-    """Copy all canonical template files (raw .j2 content) into project_dir."""
+    """Render all canonical template files with fallback context and write into project_dir.
+
+    Uses the same context that audit_project/sync_project would use when
+    pairmode_context.json is absent, so rendered canonical == rendered template.
+    """
+    context = _load_project_context(project_dir)
     for dest_rel, template_rel in CANONICAL_FILES:
-        template_path = TEMPLATES_DIR / template_rel
         dest_path = project_dir / dest_rel
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        if template_path.exists():
-            dest_path.write_text(template_path.read_text(encoding="utf-8"), encoding="utf-8")
-        else:
-            dest_path.write_text("# placeholder\n", encoding="utf-8")
+        try:
+            rendered = _JINJA_ENV.get_template(template_rel).render(**context)
+        except Exception:
+            rendered = "# placeholder\n"
+        dest_path.write_text(rendered, encoding="utf-8")
 
 
 def _write_state(project_dir: Path, extra_fields: dict | None = None) -> None:
@@ -479,4 +485,52 @@ class TestSyncPreservesProjectSpecificSections:
         preserved_text = " ".join(result.preserved)
         assert "CLAUDE.md" in preserved_text, (
             "Expected CLAUDE.md in preserved list"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Context rendering tests
+# ---------------------------------------------------------------------------
+
+
+class TestSyncUsesContextWhenCreatingFiles:
+    """sync_project uses pairmode_context.json when creating missing CLAUDE.md."""
+
+    def test_sync_creates_claude_md_with_rendered_content_not_raw_j2(
+        self, tmp_path: Path
+    ) -> None:
+        """When pairmode_context.json exists with project_name='cora', sync creates
+        CLAUDE.md with rendered content (contains 'cora', not '{{ project_name }}')."""
+        import json as _json
+
+        companion = tmp_path / ".companion"
+        companion.mkdir(parents=True, exist_ok=True)
+        ctx = {
+            "project_name": "cora",
+            "project_description": "a test project",
+            "stack": "Python / pytest",
+            "build_command": "uv run pytest",
+            "test_command": "uv run pytest",
+            "migration_command": "",
+            "domain_model": "",
+            "domain_isolation_rule": "",
+            "checklist_items": [],
+            "protected_paths": [],
+            "non_negotiables": [],
+            "module_structure": [],
+            "layer_rules": [],
+        }
+        (companion / "pairmode_context.json").write_text(
+            _json.dumps(ctx), encoding="utf-8"
+        )
+
+        # No CLAUDE.md exists — sync should create it
+        assert not (tmp_path / "CLAUDE.md").exists()
+        sync_project(tmp_path)
+
+        content = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
+        # Should contain rendered project name, not raw Jinja2
+        assert "cora" in content, "Created CLAUDE.md should contain rendered project name"
+        assert "{{ project_name }}" not in content, (
+            "Created CLAUDE.md should not contain raw Jinja2 syntax"
         )

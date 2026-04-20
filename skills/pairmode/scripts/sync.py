@@ -14,6 +14,7 @@ from datetime import date
 from pathlib import Path
 
 import click
+import jinja2
 
 # Insert anchor repo root so sibling imports work when run as CLI
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
@@ -142,6 +143,46 @@ def _append_section_to_file(project_text: str, header_key: str, canonical_body: 
 # Template content helper
 # ---------------------------------------------------------------------------
 
+_JINJA_ENV = jinja2.Environment(
+    loader=jinja2.FileSystemLoader(str(TEMPLATES_DIR)),
+    undefined=jinja2.Undefined,  # silently replaces unknown vars with ""
+    keep_trailing_newline=True,
+)
+
+
+def _load_project_context(project_dir: Path) -> dict:
+    """Load the saved bootstrap context, or return a minimal empty context."""
+    context_path = project_dir / ".companion" / "pairmode_context.json"
+    if context_path.exists():
+        try:
+            return json.loads(context_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    # Fallback: empty context (renders template variables as empty strings)
+    return {
+        "project_name": project_dir.name,
+        "project_description": "",
+        "stack": "",
+        "build_command": "",
+        "test_command": "",
+        "migration_command": "",
+        "domain_model": "",
+        "domain_isolation_rule": "",
+        "checklist_items": [],
+        "protected_paths": [],
+        "non_negotiables": [],
+        "module_structure": [],
+        "layer_rules": [],
+    }
+
+
+def _render_template(template_rel: str, context: dict) -> str:
+    """Render a Jinja2 template with context. Returns empty string on failure."""
+    try:
+        return _JINJA_ENV.get_template(template_rel).render(**context)
+    except (jinja2.TemplateNotFound, jinja2.TemplateError):
+        return ""
+
 
 def _get_template_text(template_rel: str) -> str:
     """Return raw text content of a template file."""
@@ -173,6 +214,9 @@ def sync_project(project_dir: Path, applies_to: str = "all") -> SyncResult:
     project_dir = Path(project_dir).resolve()
     result = SyncResult(project_dir=project_dir)
 
+    # Load saved template context for rendering when creating/patching files
+    context = _load_project_context(project_dir)
+
     # Run audit to get the delta
     audit = audit_project(project_dir, applies_to=applies_to)
 
@@ -197,17 +241,17 @@ def sync_project(project_dir: Path, applies_to: str = "all") -> SyncResult:
         if template_rel is None:
             continue
 
-        canonical_text = _get_template_text(template_rel)
+        rendered_text = _render_template(template_rel, context) or _get_template_text(template_rel)
         project_path = project_dir / dest_rel
 
         if not project_path.exists():
-            # File is entirely missing — create it with canonical content
+            # File is entirely missing — create it with rendered canonical content
             project_path.parent.mkdir(parents=True, exist_ok=True)
-            project_path.write_text(canonical_text, encoding="utf-8")
+            project_path.write_text(rendered_text, encoding="utf-8")
             result.applied.append(f"Created {dest_rel} (file was missing)")
         else:
             # File exists but is missing some sections — append them
-            canonical_sections = _split_sections(canonical_text)
+            canonical_sections = _split_sections(rendered_text)
             project_text = project_path.read_text(encoding="utf-8")
             changed = False
             for item in items:
@@ -230,14 +274,14 @@ def sync_project(project_dir: Path, applies_to: str = "all") -> SyncResult:
         if template_rel is None:
             continue
 
-        canonical_text = _get_template_text(template_rel)
-        canonical_sections = _split_sections(canonical_text)
+        rendered_text = _render_template(template_rel, context) or _get_template_text(template_rel)
+        canonical_sections = _split_sections(rendered_text)
         project_path = project_dir / dest_rel
 
         if not project_path.exists():
             # Shouldn't happen (inconsistent means file exists), but handle gracefully
             project_path.parent.mkdir(parents=True, exist_ok=True)
-            project_path.write_text(canonical_text, encoding="utf-8")
+            project_path.write_text(rendered_text, encoding="utf-8")
             result.applied.append(f"Created {dest_rel} (file was missing during inconsistent pass)")
             continue
 

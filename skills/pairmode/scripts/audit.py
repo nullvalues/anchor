@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import click
+import jinja2
 
 # Insert anchor repo root so sibling imports work when run as CLI
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
@@ -62,6 +63,43 @@ class AuditResult:
     extra: list[AuditItem] = field(default_factory=list)
     pairmode_version: str | None = None
     canonical_version: str = "0.1.0"
+
+
+# ---------------------------------------------------------------------------
+# Jinja2 environment for rendering templates
+# ---------------------------------------------------------------------------
+
+_JINJA_ENV = jinja2.Environment(
+    loader=jinja2.FileSystemLoader(str(TEMPLATES_DIR)),
+    undefined=jinja2.Undefined,  # silently replaces unknown vars with ""
+    keep_trailing_newline=True,
+)
+
+
+def _load_project_context(project_dir: Path) -> dict:
+    """Load the saved bootstrap context, or return a minimal empty context."""
+    context_path = project_dir / ".companion" / "pairmode_context.json"
+    if context_path.exists():
+        try:
+            return json.loads(context_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    # Fallback: empty context (renders template variables as empty strings)
+    return {
+        "project_name": project_dir.name,
+        "project_description": "",
+        "stack": "",
+        "build_command": "",
+        "test_command": "",
+        "migration_command": "",
+        "domain_model": "",
+        "domain_isolation_rule": "",
+        "checklist_items": [],
+        "protected_paths": [],
+        "non_negotiables": [],
+        "module_structure": [],
+        "layer_rules": [],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -154,13 +192,15 @@ def _find_lesson_for_file(lessons: list[dict], file_path: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _read_template_sections(template_rel_path: str) -> dict[str, str]:
-    """Read a template file and split into sections."""
-    template_path = TEMPLATES_DIR / template_rel_path
-    if not template_path.exists():
+def _read_template_sections(template_rel_path: str, context: dict | None = None) -> dict[str, str]:
+    """Render a template with context, then split into sections."""
+    if context is None:
+        context = {}
+    try:
+        rendered = _JINJA_ENV.get_template(template_rel_path).render(**context)
+    except (jinja2.TemplateNotFound, jinja2.TemplateError):
         return {}
-    text = template_path.read_text(encoding="utf-8")
-    return _split_sections(text)
+    return _split_sections(rendered)
 
 
 def _read_project_sections(project_dir: Path, rel_path: str) -> dict[str, str] | None:
@@ -178,6 +218,9 @@ def audit_project(project_dir: Path, applies_to: str = "all") -> AuditResult:
     applies_to: project type for lesson filtering ("all", "python", "typescript", etc.)
     """
     project_dir = Path(project_dir).resolve()
+
+    # Load saved template context (for rendering templates before comparison)
+    context = _load_project_context(project_dir)
 
     # Read pairmode_version from .companion/state.json
     pairmode_version: str | None = None
@@ -204,7 +247,7 @@ def audit_project(project_dir: Path, applies_to: str = "all") -> AuditResult:
 
     # Compare each canonical file
     for dest_rel, template_rel in CANONICAL_FILES:
-        canonical_sections = _read_template_sections(template_rel)
+        canonical_sections = _read_template_sections(template_rel, context)
         project_sections = _read_project_sections(project_dir, dest_rel)
 
         if project_sections is None:
