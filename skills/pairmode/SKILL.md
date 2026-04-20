@@ -48,22 +48,38 @@ re-scaffolding a project after a major methodology revision.
 
 ### `/anchor:pairmode audit`
 
-**When to use:** Periodically, or before a sync, to understand how far a project's pairmode
-scaffold has drifted from the current canonical methodology.
+**When to use:** Compare a project's current pairmode scaffold against the canonical methodology
+to see what's drifted, missing, or project-specific.
 
-**Inputs expected:**
-- `.companion/state.json` in the target project — must contain `pairmode_version`.
-- Target project root path (prompted if not provided).
+**Inputs:**
+- Current directory (used as project-dir)
+- Optional: project type tag for lesson filtering (defaults to "all")
 
 **What it does:**
-1. Reads `pairmode_version` from `.companion/state.json`.
-2. Loads the current canonical templates from `skills/pairmode/templates/`.
-3. Loads applicable lessons from `anchor/lessons/lessons.json` whose `affects` field matches
-   this project's attributes.
-4. Renders canonical templates against the project's current context.
-5. Diffs the rendered output against the project's existing scaffold files.
-6. Produces a structured audit report: files that differ, sections that differ, lessons not yet
-   incorporated, and a recommended action for each delta.
+1. Check for `.companion/state.json` in current directory (reads `pairmode_version`).
+2. Run: `uv run python ${CLAUDE_SKILL_DIR}/scripts/audit.py --project-dir "$(pwd)"`
+3. Display the output (MISSING / INCONSISTENT / EXTRA sections).
+4. If there are MISSING or INCONSISTENT items, ask: "Run sync to apply these changes?"
+   - If yes → run sync (documented in sync command below)
+   - If no → display the output and stop
+
+**Output format:**
+```
+AUDIT: <project_name> vs pairmode v<version>
+
+MISSING
+  ✗ <file>: <description>
+
+INCONSISTENT
+  ~ <file>: <description>
+
+EXTRA (project-specific, keep as-is)
+  ✓ <file>: <description>
+
+RECOMMENDATION
+  Run /anchor:pairmode sync to apply missing/inconsistent items
+  Project-specific items will be preserved
+```
 
 **Outputs:**
 - A human-readable audit report printed to the session, summarizing all deltas and recommended
