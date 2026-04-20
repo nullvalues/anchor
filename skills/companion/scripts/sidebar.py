@@ -48,10 +48,12 @@ except ImportError:
 PIPE_PATH = "/tmp/companion.pipe"
 STATE_PATH = ".companion/state.json"
 
-# Allow importing story_context from the pairmode skill
+# Allow importing story_context and spec_exception from the pairmode skill
 _ANCHOR_ROOT = Path(__file__).parent.parent.parent.parent
 if str(_ANCHOR_ROOT) not in sys.path:
     sys.path.insert(0, str(_ANCHOR_ROOT))
+
+from skills.pairmode.scripts.spec_exception import record_spec_exception  # noqa: E402
 
 console = Console()
 lock = threading.Lock()
@@ -1409,13 +1411,23 @@ def main():
                             console.print(f"[dim]{datetime.now().strftime('%H:%M:%S')} ← session ending...[/dim]")
                             threading.Thread(target=handle_session_end, args=(event,), daemon=True).start()
 
-                        # spec_exception has type= (not event=) — persist it
+                        # spec_exception has type= (not event=) — persist it and record in spec
                         if event.get("type") == "spec_exception":
                             session_id = event.get("session_id", "")
                             persist_capture(event, session_id)
                             console.print(
                                 f"[dim]  → spec exception persisted: {Path(event.get('path', '')).name}[/dim]"
                             )
+                            try:
+                                record_spec_exception(
+                                    project_dir=Path(os.getcwd()),
+                                    file_path=event.get("path", ""),
+                                    non_negotiable=event.get("non_negotiable", ""),
+                                    override_reason=event.get("override_reason", ""),
+                                    session_id=session_id,
+                                )
+                            except Exception as _exc:
+                                log_error(f"record_spec_exception error: {_exc}")
 
                     except json.JSONDecodeError:
                         continue
