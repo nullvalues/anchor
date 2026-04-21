@@ -1365,6 +1365,31 @@ def render_startup(state: dict):
 
 
 def main():
+    import argparse
+    import hashlib
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--project-dir", default=None)
+    args, _ = parser.parse_known_args()
+
+    global PIPE_PATH
+    _project_dir = str(Path(args.project_dir).resolve()) if args.project_dir else str(Path.cwd().resolve())
+    _hash = hashlib.md5(_project_dir.encode()).hexdigest()[:8]
+    PIPE_PATH = f"/tmp/companion-{_hash}.pipe"
+
+    # Write sidebar PID
+    _pid_path = Path(".companion/sidebar.pid")
+    _pid_path.parent.mkdir(parents=True, exist_ok=True)
+    _pid_path.write_text(str(os.getpid()))
+
+    # Write pipe_path into state.json
+    _state_path = Path(STATE_PATH)
+    try:
+        _state = json.loads(_state_path.read_text()) if _state_path.exists() else {}
+    except Exception:
+        _state = {}
+    _state["pipe_path"] = PIPE_PATH
+    _state_path.write_text(json.dumps(_state, indent=2))
+
     # Clear entire screen + move cursor to top — wipes shell login messages
     sys.stdout.write("\033[2J\033[H")
     sys.stdout.flush()

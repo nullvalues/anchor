@@ -75,7 +75,8 @@ anchor/
 ```
 Claude Code session
     ↓ (after each response)
-stop.py hook → writes to /tmp/companion.pipe (relay only, no API calls)
+stop.py hook → writes to /tmp/companion-<hash>.pipe (relay only, no API calls)
+    (pipe path is project-scoped; hash is first 8 chars of md5 of project dir)
     ↓
 sidebar.py reads pipe → calls Claude API → extracts decisions
     ↓
