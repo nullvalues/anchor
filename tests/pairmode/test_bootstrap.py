@@ -536,31 +536,14 @@ class TestSpecDerivedChecklist:
         # Templates still render — we just verify bootstrap succeeds cleanly
         assert (tmp_path / "CLAUDE.md").exists()
 
-    def test_spec_derived_checklist_items_passed_to_templates(self, tmp_path):
-        """When a spec has non-negotiables, they appear in the reviewer agent checklist."""
+    def test_reviewer_checklist_contains_only_universal_items(self, tmp_path):
+        """Reviewer checklist uses only universal items; spec non-negotiables are NOT injected."""
         _make_spec_structure(
             tmp_path,
             modules={
                 "auth": {
                     "module": "auth",
                     "non_negotiables": ["Auth must never call billing directly — events only"],
-                    "business_rules": [],
-                }
-            },
-        )
-        result = run_bootstrap(tmp_path)
-        assert result.exit_code == 0, result.output
-        content = (tmp_path / ".claude/agents/reviewer.md").read_text()
-        assert "Auth must never call billing directly" in content
-
-    def test_spec_business_rules_appear_in_checklist(self, tmp_path):
-        """Business rules from spec show up in the reviewer agent checklist."""
-        _make_spec_structure(
-            tmp_path,
-            modules={
-                "payments": {
-                    "module": "payments",
-                    "non_negotiables": [],
                     "business_rules": ["All payments must be idempotent"],
                 }
             },
@@ -568,7 +551,13 @@ class TestSpecDerivedChecklist:
         result = run_bootstrap(tmp_path)
         assert result.exit_code == 0, result.output
         content = (tmp_path / ".claude/agents/reviewer.md").read_text()
-        assert "All payments must be idempotent" in content
+        # Spec text must NOT appear in reviewer checklist (L005 fix)
+        assert "Auth must never call billing directly" not in content
+        assert "All payments must be idempotent" not in content
+        # Universal items must still be present
+        assert "PROTECTED FILES" in content
+        assert "STORY SCOPE" in content
+        assert "BUILD GATE" in content
 
 
 class TestSpecDerivedDenyList:
