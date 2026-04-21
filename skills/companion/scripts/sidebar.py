@@ -21,8 +21,10 @@ Conflict actions:
   o = override   (require reason, update spec, archive old rule)
 """
 import asyncio
+import fnmatch
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -47,6 +49,68 @@ except ImportError:
 
 PIPE_PATH = "/tmp/companion.pipe"
 STATE_PATH = ".companion/state.json"
+DENY_RATIONALE_PATH = ".claude/settings.deny-rationale.json"
+
+# Pattern to extract glob from Edit(...) or Write(...) or Bash(...)
+_RULE_RE = re.compile(r'^(?:Edit|Write|Bash)\((.+)\)$')
+
+# Lazy deny-rationale rules cache; keyed by cwd to handle multi-project sidebars.
+_deny_rationale_cache: dict[str, list[dict]] = {}
+
+
+def _load_deny_rationale(cwd: str) -> list[dict]:
+    """Load deny-rationale.json rules lazily; return [] if absent or unparseable.
+
+    Results are cached per cwd so the file is read at most once per sidebar
+    session.  The sidebar runs in a separate async process so this I/O is fine.
+    """
+    if cwd in _deny_rationale_cache:
+        return _deny_rationale_cache[cwd]
+    path = Path(cwd) / DENY_RATIONALE_PATH
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        rules = data.get("rules", [])
+    except Exception:
+        rules = []
+    _deny_rationale_cache[cwd] = rules
+    return rules
+
+
+def _check_protected(file_path: str, cwd: str) -> tuple[bool, str, str]:
+    """Check if *file_path* matches any deny-rationale rule.
+
+    Returns ``(protected, protection_rule, non_negotiable)``.
+    If no match returns ``(False, "", "")``.
+
+    This mirrors the logic that used to live in the post_tool_use hook but
+    was moved here so that the hook remains a zero-I/O thin relay.
+    """
+    if not file_path:
+        return False, "", ""
+
+    rules = _load_deny_rationale(cwd)
+    if not rules:
+        return False, "", ""
+
+    # Normalise path — make relative to cwd if absolute
+    rel_path = file_path
+    if os.path.isabs(file_path):
+        try:
+            rel_path = str(Path(file_path).relative_to(cwd))
+        except ValueError:
+            rel_path = file_path
+
+    for rule in rules:
+        pattern_str = rule.get("pattern", "")
+        m = _RULE_RE.match(pattern_str)
+        if not m:
+            continue
+        glob = m.group(1)
+        if fnmatch.fnmatch(rel_path, glob):
+            return True, pattern_str, rule.get("non_negotiable", "")
+
+    return False, "", ""
+
 
 # Allow importing story_context and spec_exception from the pairmode skill
 _ANCHOR_ROOT = Path(__file__).parent.parent.parent.parent
@@ -983,9 +1047,17 @@ def handle_post_tool_use(event: dict):
     if not file_path:
         return
 
-    # Protected file override capture
-    if event.get("protected"):
-        display_override_prompt(event)
+    # Protected file override capture — classification happens here in the
+    # sidebar (not in the hook) so the hook stays a zero-I/O thin relay.
+    protected, protection_rule, non_negotiable = _check_protected(file_path, cwd)
+    if protected:
+        enriched_event = {
+            **event,
+            "protected": True,
+            "protection_rule": protection_rule,
+            "non_negotiable": non_negotiable,
+        }
+        display_override_prompt(enriched_event)
 
     # Track module boundaries and emit a warning when multiple modules touched
     multi_module = track_module_boundary(file_path, cwd)

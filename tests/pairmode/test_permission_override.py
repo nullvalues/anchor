@@ -1,10 +1,15 @@
 """Tests for Story 5.4 — Permission override capture.
 
+After the Phase 5 security audit, protected-file classification was moved
+from the hook (post_tool_use.py) to the sidebar (sidebar.py) so that the
+hook remains a zero-I/O thin relay.
+
 Covers:
-- Pattern matching logic (fnmatch via _check_protected)
-- deny-rationale.json parsing
-- protected=True detection in post_tool_use hook
-- skip behaviour (no record written)
+- Pattern matching logic (fnmatch via sidebar._check_protected)
+- deny-rationale.json parsing via sidebar._load_deny_rationale
+- Hook pipe message has path/tool but NO protected fields
+- Sidebar _check_protected correctly classifies protected files
+- display_override_prompt skip/record behaviour (unchanged)
 """
 
 from __future__ import annotations
@@ -18,11 +23,23 @@ import sys
 import pytest
 
 # ---------------------------------------------------------------------------
-# Import the hook helpers directly (no subprocess)
+# Import sidebar helpers (classification now lives here)
 # ---------------------------------------------------------------------------
 
-# The hook lives in hooks/ which has no __init__.py and is not a package.
-# Load it as a module via importlib.
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
+
+from skills.companion.scripts.sidebar import (  # noqa: E402
+    _RULE_RE,
+    _check_protected,
+    _load_deny_rationale,
+    _deny_rationale_cache,
+    display_override_prompt,
+)
+
+
+# ---------------------------------------------------------------------------
+# Import hook for pipe-message shape tests
+# ---------------------------------------------------------------------------
 
 import importlib.util
 
@@ -36,9 +53,6 @@ def _load_hook():
 
 
 _hook = _load_hook()
-_check_protected = _hook._check_protected
-_load_deny_rationale = _hook._load_deny_rationale
-_RULE_RE = _hook._RULE_RE
 
 
 # ---------------------------------------------------------------------------
@@ -56,8 +70,77 @@ def _write_rationale(project_dir: pathlib.Path, rules: list[dict]) -> pathlib.Pa
     return dr_path
 
 
+def _clear_cache():
+    """Clear the sidebar deny-rationale cache between tests."""
+    _deny_rationale_cache.clear()
+
+
 # ---------------------------------------------------------------------------
-# _RULE_RE — regex extraction tests
+# Hook pipe-message shape — must NOT contain protected fields
+# ---------------------------------------------------------------------------
+
+
+def test_hook_has_no_protected_helpers():
+    """The hook must no longer expose _check_protected or _load_deny_rationale."""
+    assert not hasattr(_hook, "_check_protected"), (
+        "Hook must not have _check_protected — classification belongs in the sidebar"
+    )
+    assert not hasattr(_hook, "_load_deny_rationale"), (
+        "Hook must not have _load_deny_rationale — classification belongs in the sidebar"
+    )
+
+
+def test_hook_pipe_message_has_no_protected_field(tmp_path, monkeypatch):
+    """Pipe messages from the hook must not include 'protected' or 'non_negotiable'."""
+    import io
+
+    written_data = []
+
+    # Stub out os.open / os.write / os.close and os.path.exists so the hook
+    # thinks the pipe exists and "writes" without hitting the filesystem.
+    monkeypatch.setattr(_hook.os.path, "exists", lambda p: True)
+
+    real_open = _hook.os.open
+
+    def fake_os_open(path, flags):
+        if path == _hook.PIPE_PATH:
+            return 999
+        return real_open(path, flags)
+
+    monkeypatch.setattr(_hook.os, "open", fake_os_open)
+    monkeypatch.setattr(_hook.os, "write", lambda fd, data: written_data.append(data))
+    monkeypatch.setattr(_hook.os, "close", lambda fd: None)
+
+    # Patch state.json read to avoid filesystem dependency
+    monkeypatch.setattr(
+        "builtins.open",
+        lambda *a, **kw: io.StringIO('{"last_loaded_modules": ["auth"]}')
+        if a and "state.json" in str(a[0])
+        else open(*a, **kw),
+    )
+
+    hook_input = json.dumps({
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "src/services/auth/middleware.ts"},
+        "cwd": str(tmp_path),
+        "session_id": "sess-abc",
+    })
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO(hook_input))
+
+    with pytest.raises(SystemExit):
+        _hook.main()
+
+    assert written_data, "Expected at least one pipe write"
+    msg = json.loads(written_data[0].decode())
+    assert "path" in msg
+    assert "tool" in msg
+    assert "protected" not in msg, "Hook must NOT set protected field"
+    assert "non_negotiable" not in msg, "Hook must NOT set non_negotiable field"
+    assert "protection_rule" not in msg, "Hook must NOT set protection_rule field"
+
+
+# ---------------------------------------------------------------------------
+# _RULE_RE — regex extraction tests (now from sidebar)
 # ---------------------------------------------------------------------------
 
 
@@ -84,11 +167,12 @@ def test_rule_re_no_match_plain_path():
 
 
 # ---------------------------------------------------------------------------
-# _load_deny_rationale — JSON loading
+# _load_deny_rationale — JSON loading (sidebar version)
 # ---------------------------------------------------------------------------
 
 
 def test_load_deny_rationale_returns_rules(tmp_path):
+    _clear_cache()
     rules = [
         {"pattern": "Edit(src/auth/**)", "non_negotiable": "Auth must never call billing"}
     ]
@@ -98,11 +182,13 @@ def test_load_deny_rationale_returns_rules(tmp_path):
 
 
 def test_load_deny_rationale_missing_file_returns_empty(tmp_path):
+    _clear_cache()
     result = _load_deny_rationale(str(tmp_path))
     assert result == []
 
 
 def test_load_deny_rationale_malformed_json_returns_empty(tmp_path):
+    _clear_cache()
     dr_path = tmp_path / ".claude" / "settings.deny-rationale.json"
     dr_path.parent.mkdir(parents=True)
     dr_path.write_text("NOT JSON", encoding="utf-8")
@@ -111,6 +197,7 @@ def test_load_deny_rationale_malformed_json_returns_empty(tmp_path):
 
 
 def test_load_deny_rationale_no_rules_key(tmp_path):
+    _clear_cache()
     dr_path = tmp_path / ".claude" / "settings.deny-rationale.json"
     dr_path.parent.mkdir(parents=True)
     dr_path.write_text(json.dumps({"other": []}), encoding="utf-8")
@@ -119,11 +206,12 @@ def test_load_deny_rationale_no_rules_key(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _check_protected — pattern matching
+# _check_protected — pattern matching (sidebar version)
 # ---------------------------------------------------------------------------
 
 
 def test_check_protected_match_relative(tmp_path):
+    _clear_cache()
     _write_rationale(tmp_path, [
         {
             "pattern": "Edit(src/services/auth/**)",
@@ -139,6 +227,7 @@ def test_check_protected_match_relative(tmp_path):
 
 
 def test_check_protected_match_absolute_path(tmp_path):
+    _clear_cache()
     _write_rationale(tmp_path, [
         {
             "pattern": "Edit(src/services/auth/**)",
@@ -151,6 +240,7 @@ def test_check_protected_match_absolute_path(tmp_path):
 
 
 def test_check_protected_no_match(tmp_path):
+    _clear_cache()
     _write_rationale(tmp_path, [
         {
             "pattern": "Edit(src/services/auth/**)",
@@ -166,7 +256,8 @@ def test_check_protected_no_match(tmp_path):
 
 
 def test_check_protected_no_rationale_file(tmp_path):
-    """Hook silently skips check when deny-rationale.json does not exist."""
+    """Sidebar silently skips check when deny-rationale.json does not exist."""
+    _clear_cache()
     protected, rule, nn = _check_protected(
         "src/services/auth/middleware.ts", str(tmp_path)
     )
@@ -174,6 +265,7 @@ def test_check_protected_no_rationale_file(tmp_path):
 
 
 def test_check_protected_empty_file_path(tmp_path):
+    _clear_cache()
     _write_rationale(tmp_path, [
         {"pattern": "Edit(src/**)", "non_negotiable": "Do not touch src"}
     ])
@@ -182,6 +274,7 @@ def test_check_protected_empty_file_path(tmp_path):
 
 
 def test_check_protected_multiple_rules_first_match_wins(tmp_path):
+    _clear_cache()
     _write_rationale(tmp_path, [
         {
             "pattern": "Edit(src/services/auth/**)",
@@ -200,8 +293,8 @@ def test_check_protected_multiple_rules_first_match_wins(tmp_path):
 
 
 def test_check_protected_write_pattern_not_matched_by_edit(tmp_path):
-    """Write(...) patterns should NOT match (hook only emits the file path,
-    the glob inner part must match the path — the tool type prefix is stripped)."""
+    """Write(...) patterns should match (glob inner part is what matters)."""
+    _clear_cache()
     _write_rationale(tmp_path, [
         {
             "pattern": "Write(src/services/auth/**)",
@@ -224,9 +317,6 @@ def test_check_protected_write_pattern_not_matched_by_edit(tmp_path):
 
 def test_display_override_prompt_skip_writes_nothing(monkeypatch, tmp_path):
     """When user presses 's', no pipe write should occur."""
-    sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
-    from skills.companion.scripts.sidebar import display_override_prompt
-
     written = []
 
     def fake_open(path, flags):
@@ -239,9 +329,10 @@ def test_display_override_prompt_skip_writes_nothing(monkeypatch, tmp_path):
     def fake_close(fd):
         pass
 
-    monkeypatch.setattr("skills.companion.scripts.sidebar.os.open", fake_open)
-    monkeypatch.setattr("skills.companion.scripts.sidebar.os.write", fake_write)
-    monkeypatch.setattr("skills.companion.scripts.sidebar.os.close", fake_close)
+    import skills.companion.scripts.sidebar as sidebar_mod
+    monkeypatch.setattr(sidebar_mod.os, "open", fake_open)
+    monkeypatch.setattr(sidebar_mod.os, "write", fake_write)
+    monkeypatch.setattr(sidebar_mod.os, "close", fake_close)
     monkeypatch.setattr("builtins.input", lambda: "s")
 
     event = {
@@ -260,9 +351,6 @@ def test_display_override_prompt_skip_writes_nothing(monkeypatch, tmp_path):
 
 def test_display_override_prompt_reason_writes_spec_exception(monkeypatch, tmp_path):
     """When user provides a reason, a spec_exception should be written to the pipe."""
-    sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
-    from skills.companion.scripts.sidebar import display_override_prompt
-
     written_data = []
 
     def fake_open(path, flags):
@@ -274,9 +362,10 @@ def test_display_override_prompt_reason_writes_spec_exception(monkeypatch, tmp_p
     def fake_close(fd):
         pass
 
-    monkeypatch.setattr("skills.companion.scripts.sidebar.os.open", fake_open)
-    monkeypatch.setattr("skills.companion.scripts.sidebar.os.write", fake_write)
-    monkeypatch.setattr("skills.companion.scripts.sidebar.os.close", fake_close)
+    import skills.companion.scripts.sidebar as sidebar_mod
+    monkeypatch.setattr(sidebar_mod.os, "open", fake_open)
+    monkeypatch.setattr(sidebar_mod.os, "write", fake_write)
+    monkeypatch.setattr(sidebar_mod.os, "close", fake_close)
     monkeypatch.setattr("builtins.input", lambda: "emergency hotfix for production outage")
 
     event = {
@@ -299,9 +388,6 @@ def test_display_override_prompt_reason_writes_spec_exception(monkeypatch, tmp_p
 
 def test_display_override_prompt_empty_reason_skips(monkeypatch, tmp_path):
     """Empty string input is treated as skip — no pipe write."""
-    sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
-    from skills.companion.scripts.sidebar import display_override_prompt
-
     written_data = []
 
     def fake_open(path, flags):
@@ -313,9 +399,10 @@ def test_display_override_prompt_empty_reason_skips(monkeypatch, tmp_path):
     def fake_close(fd):
         pass
 
-    monkeypatch.setattr("skills.companion.scripts.sidebar.os.open", fake_open)
-    monkeypatch.setattr("skills.companion.scripts.sidebar.os.write", fake_write)
-    monkeypatch.setattr("skills.companion.scripts.sidebar.os.close", fake_close)
+    import skills.companion.scripts.sidebar as sidebar_mod
+    monkeypatch.setattr(sidebar_mod.os, "open", fake_open)
+    monkeypatch.setattr(sidebar_mod.os, "write", fake_write)
+    monkeypatch.setattr(sidebar_mod.os, "close", fake_close)
     monkeypatch.setattr("builtins.input", lambda: "")
 
     event = {

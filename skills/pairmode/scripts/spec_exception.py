@@ -73,7 +73,34 @@ def record_spec_exception(
         return
 
     spec_location: Path = spec_result["spec_location"]
-    spec_path = spec_location / "openspec" / "specs" / module_name / "spec.json"
+
+    # --- Path traversal guard -----------------------------------------------
+    # Resolve spec_location and assert it is absolute before use.
+    try:
+        spec_location = spec_location.resolve()
+    except OSError as exc:
+        logger.warning("Failed to resolve spec_location %s: %s", spec_location, exc)
+        return
+
+    if not spec_location.is_absolute():
+        logger.warning(
+            "spec_location %s did not resolve to an absolute path — skipping", spec_location
+        )
+        return
+
+    specs_root = (spec_location / "openspec" / "specs").resolve()
+    try:
+        spec_path = (spec_location / "openspec" / "specs" / module_name / "spec.json").resolve()
+    except OSError as exc:
+        logger.warning("Failed to resolve spec_path: %s", exc)
+        return
+
+    if not str(spec_path).startswith(str(specs_root) + "/") and spec_path != specs_root:
+        logger.warning(
+            "spec_path %s is outside specs boundary %s — skipping", spec_path, specs_root
+        )
+        return
+    # -------------------------------------------------------------------------
 
     if not spec_path.exists():
         logger.warning("spec.json not found at %s — skipping exception record", spec_path)
