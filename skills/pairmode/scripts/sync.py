@@ -26,6 +26,7 @@ from skills.pairmode.scripts.audit import (  # noqa: E402
     PAIRMODE_VERSION,
     _split_sections,
     _normalise,
+    _load_project_context as _audit_load_project_context,
 )
 
 # ---------------------------------------------------------------------------
@@ -152,9 +153,7 @@ _JINJA_ENV = jinja2.Environment(
 
 def _load_project_context(project_dir: Path) -> dict:
     """Load the saved bootstrap context, or return a minimal empty context."""
-    # Delegate to audit._load_project_context and discard the found flag
-    from skills.pairmode.scripts.audit import _load_project_context as _audit_load_ctx
-    context, _ = _audit_load_ctx(project_dir)
+    context, _ = _audit_load_project_context(project_dir)
     return context
 
 

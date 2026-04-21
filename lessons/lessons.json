@@ -17,7 +17,7 @@
       "applies_to": [
         "all"
       ],
-      "status": "captured"
+      "status": "applied"
     },
     {
       "id": "L002",
@@ -35,7 +35,7 @@
       "applies_to": [
         "all"
       ],
-      "status": "captured"
+      "status": "applied"
     }
   ]
 }

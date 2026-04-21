@@ -66,7 +66,7 @@ Note: `pairmode_context.json` (created by `/anchor:pairmode bootstrap`) must exi
 
 **What it does:**
 1. Check for `.companion/state.json` in current directory (reads `pairmode_version`).
-2. Run: `uv run python ${CLAUDE_SKILL_DIR}/scripts/audit.py --project-dir "$(pwd)"`
+2. Run: `PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scripts/audit.py" --project-dir "$(pwd)"`
 3. Display the output (MISSING / INCONSISTENT / EXTRA sections).
 4. If there are MISSING or INCONSISTENT items, ask: "Run sync to apply these changes?"
    - If yes → run sync (documented in sync command below)
@@ -108,11 +108,11 @@ pairmode scaffold up to date with the current canonical methodology.
 Note: `pairmode_context.json` (created by `/anchor:pairmode bootstrap`) must exist for INCONSISTENT results to be meaningful.
 
 **What it does:**
-1. Run audit to get current delta: `uv run python ${CLAUDE_SKILL_DIR}/scripts/audit.py --project-dir "$(pwd)"`
+1. Run audit to get current delta: `PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scripts/audit.py" --project-dir "$(pwd)"`
 2. Display the audit result
 3. If no MISSING or INCONSISTENT items: report "Already up to date" and stop
 4. Otherwise, confirm with user before applying changes
-5. Run: `uv run python ${CLAUDE_SKILL_DIR}/scripts/sync.py --project-dir "$(pwd)"`
+5. Run: `PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scripts/sync.py" --project-dir "$(pwd)"`
 6. Display sync output
 
 **Output format:**

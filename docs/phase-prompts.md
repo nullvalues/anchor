@@ -1170,4 +1170,6 @@ PYTHONPATH=/mnt/work/anchor uv run python skills/pairmode/scripts/lesson_review.
 ```
 
 Confirm `lessons/lessons.json` shows `"status": "applied"` for both L001 and L002 before
-proceeding to Phase 7.
+proceeding to Phase 7. As of the Phase 6 checkpoint, this action has NOT been run yet.
+The lesson_review.py `--approve` flow is the only permitted way to update lesson status
+(it enforces the append-only invariant). Do not edit lessons.json directly.
