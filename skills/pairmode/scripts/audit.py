@@ -63,6 +63,7 @@ class AuditResult:
     extra: list[AuditItem] = field(default_factory=list)
     pairmode_version: str | None = None
     canonical_version: str = "0.1.0"
+    context_missing: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -76,16 +77,21 @@ _JINJA_ENV = jinja2.Environment(
 )
 
 
-def _load_project_context(project_dir: Path) -> dict:
-    """Load the saved bootstrap context, or return a minimal empty context."""
+def _load_project_context(project_dir: Path) -> tuple[dict, bool]:
+    """Load the saved bootstrap context, or return a minimal empty context.
+
+    Returns:
+        (context, context_found) where context_found is True when
+        pairmode_context.json exists and parses successfully.
+    """
     context_path = project_dir / ".companion" / "pairmode_context.json"
     if context_path.exists():
         try:
-            return json.loads(context_path.read_text(encoding="utf-8"))
+            return json.loads(context_path.read_text(encoding="utf-8")), True
         except (json.JSONDecodeError, OSError):
             pass
     # Fallback: empty context (renders template variables as empty strings)
-    return {
+    fallback = {
         "project_name": project_dir.name,
         "project_description": "",
         "stack": "",
@@ -100,6 +106,7 @@ def _load_project_context(project_dir: Path) -> dict:
         "module_structure": [],
         "layer_rules": [],
     }
+    return fallback, False
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +227,7 @@ def audit_project(project_dir: Path, applies_to: str = "all") -> AuditResult:
     project_dir = Path(project_dir).resolve()
 
     # Load saved template context (for rendering templates before comparison)
-    context = _load_project_context(project_dir)
+    context, context_found = _load_project_context(project_dir)
 
     # Read pairmode_version from .companion/state.json
     pairmode_version: str | None = None
@@ -240,6 +247,7 @@ def audit_project(project_dir: Path, applies_to: str = "all") -> AuditResult:
         project_dir=project_dir,
         pairmode_version=pairmode_version,
         canonical_version=PAIRMODE_VERSION,
+        context_missing=not context_found,
     )
 
     # Load applicable lessons
@@ -290,19 +298,20 @@ def audit_project(project_dir: Path, applies_to: str = "all") -> AuditResult:
                 )
             )
 
-        # Sections in both → check content
-        for key in canonical_keys & project_keys:
-            canonical_body = _normalise(canonical_sections[key])
-            project_body = _normalise(project_sections[key])
-            if canonical_body != project_body:
-                result.inconsistent.append(
-                    AuditItem(
-                        file=dest_rel,
-                        section=key,
-                        description=f"Section '{key}' content differs from canonical template",
+        # Sections in both → check content (skipped when context file is absent)
+        if not result.context_missing:
+            for key in canonical_keys & project_keys:
+                canonical_body = _normalise(canonical_sections[key])
+                project_body = _normalise(project_sections[key])
+                if canonical_body != project_body:
+                    result.inconsistent.append(
+                        AuditItem(
+                            file=dest_rel,
+                            section=key,
+                            description=f"Section '{key}' content differs from canonical template",
+                        )
                     )
-                )
-            # else: consistent — nothing to add
+                # else: consistent — nothing to add
 
     return result
 
@@ -317,6 +326,18 @@ def format_audit_output(result: AuditResult) -> str:
     lines: list[str] = []
     lines.append(f"AUDIT: {result.project_name} vs pairmode v{result.canonical_version}")
     lines.append("")
+
+    if result.context_missing:
+        lines.append(
+            "WARNING: No pairmode_context.json found — INCONSISTENT comparison disabled."
+        )
+        lines.append(
+            "  Template body comparison requires a context file to be meaningful."
+        )
+        lines.append(
+            "  Run /anchor:pairmode bootstrap to generate pairmode_context.json, then re-audit."
+        )
+        lines.append("")
 
     if result.missing:
         lines.append("MISSING")
