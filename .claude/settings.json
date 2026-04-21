@@ -16,16 +16,22 @@
   "permissions": {
     "defaultMode": "auto",
     "deny": [
+      "Edit(skills/companion/**)",
+      "Write(skills/companion/**)",
+      "Edit(docs/**)",
+      "Write(docs/**)",
       "Edit(hooks/**)",
       "Write(hooks/**)",
-      "Edit(skills/seed/**)",
-      "Write(skills/seed/**)",
-      "Edit(skills/companion/scripts/sidebar.py)",
-      "Write(skills/companion/scripts/sidebar.py)",
+      "Edit(lessons/**)",
+      "Write(lessons/**)",
+      "Edit(skills/pairmode/**)",
+      "Write(skills/pairmode/**)",
+      "Edit(tests/pairmode/**)",
+      "Write(tests/pairmode/**)",
       "Edit(.claude-plugin/**)",
       "Write(.claude-plugin/**)",
-      "Edit(lessons/lessons.json)",
-      "Write(lessons/lessons.json)"
+      "Edit(skills/seed/**)",
+      "Write(skills/seed/**)"
     ]
   }
 }
