@@ -170,7 +170,7 @@ options: ["Skip"]
 
 If the user provides a story ID (not "Skip" and not blank), write it to state:
 ```bash
-PYTHONPATH=/path/to/anchor uv run python -c "
+uv run python -c "
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path('${CLAUDE_SKILL_DIR}').parent.parent.parent))

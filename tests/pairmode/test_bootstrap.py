@@ -436,6 +436,42 @@ def test_help_succeeds():
 
 
 # ---------------------------------------------------------------------------
+# sys.path guard test (subprocess, no PYTHONPATH in env)
+# ---------------------------------------------------------------------------
+
+def test_bootstrap_help_via_subprocess_no_pythonpath(tmp_path):
+    """Verify bootstrap.py --help works without PYTHONPATH set externally.
+
+    The sys.path guard inside bootstrap.py must handle the import path
+    insertion on its own, so no PYTHONPATH env var is required.
+    """
+    import os
+    import subprocess
+    import sys
+
+    bootstrap_path = str(
+        pathlib.Path(__file__).parent.parent.parent
+        / "skills" / "pairmode" / "scripts" / "bootstrap.py"
+    )
+
+    # Strip PYTHONPATH from the environment to ensure the guard does all the work
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+
+    result = subprocess.run(
+        [sys.executable, bootstrap_path, "--help"],
+        cwd=str(tmp_path),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"bootstrap.py --help failed without PYTHONPATH.\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+    assert "project-dir" in result.stdout
+
+
+# ---------------------------------------------------------------------------
 # Spec-derived scenarios
 # ---------------------------------------------------------------------------
 

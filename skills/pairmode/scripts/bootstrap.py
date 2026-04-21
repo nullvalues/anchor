@@ -11,6 +11,10 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
+import sys as _sys
+from pathlib import Path as _Path
+
+_sys.path.insert(0, str(_Path(__file__).parent.parent.parent.parent))
 
 import click
 import jinja2
