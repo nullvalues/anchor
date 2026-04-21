@@ -838,6 +838,13 @@ The sidebar handles `protected: true` by displaying an override capture prompt:
 If the user provides a reason, write a `spec_exception` message to the pipe.
 If the user skips (presses s), no record is written.
 
+> **As-built note (Phase 5 security audit):** The hook annotation approach described
+> above was not implemented. Protected-file classification was moved to the sidebar
+> (`_check_protected()` function) so the hook remains a zero-I/O thin relay. The pipe
+> message from the hook contains only `path` and `tool`. The sidebar enriches the event
+> with `protected`, `protection_rule`, and `non_negotiable` before calling
+> `display_override_prompt()`.
+
 ---
 
 ### Story 5.5 — Spec exception recording
@@ -873,6 +880,10 @@ def record_spec_exception(
 ```
 
 Create `tests/pairmode/test_spec_exception.py`.
+
+> **As-built note:** `record_spec_exception()` was extracted into a standalone module at
+> `skills/pairmode/scripts/spec_exception.py` and imported by sidebar.py. This keeps
+> spec-write logic in the pairmode skill layer and makes the function independently testable.
 
 ---
 
