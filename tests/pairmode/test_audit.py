@@ -14,6 +14,7 @@ from skills.pairmode.scripts.audit import (
     format_audit_output,
     _load_project_context,
     _JINJA_ENV,
+    _is_separator_key,
 )
 from skills.pairmode.scripts import audit as _audit_mod
 
@@ -690,3 +691,170 @@ class TestFormatAuditOutputContextMissing:
         )
         output = format_audit_output(result)
         assert "WARNING: No pairmode_context.json found" not in output
+
+
+# ---------------------------------------------------------------------------
+# Story 6.2 — separator-key filtering
+# ---------------------------------------------------------------------------
+
+
+class TestIsSeparatorKey:
+    """Unit tests for the _is_separator_key helper."""
+
+    def test_plain_triple_dash_is_separator(self) -> None:
+        assert _is_separator_key("---") is True
+
+    def test_quad_dash_is_separator(self) -> None:
+        assert _is_separator_key("----") is True
+
+    def test_dash_with_suffix_zero_is_separator(self) -> None:
+        assert _is_separator_key("---__0") is True
+
+    def test_dash_with_suffix_one_is_separator(self) -> None:
+        assert _is_separator_key("---__1") is True
+
+    def test_section_header_is_not_separator(self) -> None:
+        assert _is_separator_key("## session modes") is False
+
+    def test_preamble_key_is_not_separator(self) -> None:
+        assert _is_separator_key("__preamble__0") is False
+
+
+class TestSeparatorKeysFilteredFromOutput:
+    """Integration: separator-keyed sections never appear in MISSING, EXTRA, or INCONSISTENT."""
+
+    def _make_project_with_separators(self, project_dir: Path) -> None:
+        """Write a CLAUDE.md that contains --- separators between sections."""
+        content = (
+            "## Session modes\n\nSome content.\n\n"
+            "---\n\n"
+            "## Build rules\n\nOther content.\n"
+        )
+        (project_dir / "CLAUDE.md").write_text(content, encoding="utf-8")
+
+    def test_separator_keys_not_in_inconsistent(self, tmp_path: Path) -> None:
+        """Project file with --- separators must not produce INCONSISTENT items
+        whose section key matches the separator pattern."""
+        import json as _json
+
+        companion = tmp_path / ".companion"
+        companion.mkdir(parents=True, exist_ok=True)
+        ctx = {
+            "project_name": "testproject",
+            "project_description": "",
+            "stack": "",
+            "build_command": "",
+            "test_command": "",
+            "migration_command": "",
+            "domain_model": "",
+            "domain_isolation_rule": "",
+            "checklist_items": [],
+            "protected_paths": [],
+            "non_negotiables": [],
+            "module_structure": [],
+            "layer_rules": [],
+        }
+        (companion / "pairmode_context.json").write_text(_json.dumps(ctx), encoding="utf-8")
+
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+        # Append a separator to CLAUDE.md to simulate the pattern
+        claude_md = tmp_path / "CLAUDE.md"
+        existing = claude_md.read_text(encoding="utf-8")
+        claude_md.write_text(existing + "\n---\n\nExtra text after separator.\n", encoding="utf-8")
+
+        result = audit_project(tmp_path)
+
+        separator_inconsistent = [
+            i for i in result.inconsistent if _is_separator_key(i.section)
+        ]
+        assert separator_inconsistent == [], (
+            f"Separator-keyed sections must not appear in INCONSISTENT: {separator_inconsistent}"
+        )
+
+    def test_separator_keys_not_in_missing(self, tmp_path: Path) -> None:
+        """No MISSING item should have a separator-pattern section key."""
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+        (tmp_path / "CLAUDE.md").unlink()
+
+        result = audit_project(tmp_path)
+
+        separator_missing = [i for i in result.missing if _is_separator_key(i.section)]
+        assert separator_missing == [], (
+            f"Separator-keyed sections must not appear in MISSING: {separator_missing}"
+        )
+
+    def test_separator_keys_not_in_extra(self, tmp_path: Path) -> None:
+        """No EXTRA item should have a separator-pattern section key."""
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+        # Append a raw --- separator to CLAUDE.md
+        claude_md = tmp_path / "CLAUDE.md"
+        existing = claude_md.read_text(encoding="utf-8")
+        claude_md.write_text(existing + "\n---\n\nExtra text.\n", encoding="utf-8")
+
+        result = audit_project(tmp_path)
+
+        separator_extra = [i for i in result.extra if _is_separator_key(i.section)]
+        assert separator_extra == [], (
+            f"Separator-keyed sections must not appear in EXTRA: {separator_extra}"
+        )
+
+    def test_legitimate_section_differences_still_reported(self, tmp_path: Path) -> None:
+        """A real ## section difference is still reported as INCONSISTENT
+        even after the separator-key filter is applied."""
+        import json as _json
+
+        companion = tmp_path / ".companion"
+        companion.mkdir(parents=True, exist_ok=True)
+        ctx = {
+            "project_name": "testproject",
+            "project_description": "",
+            "stack": "",
+            "build_command": "",
+            "test_command": "",
+            "migration_command": "",
+            "domain_model": "",
+            "domain_isolation_rule": "",
+            "checklist_items": [],
+            "protected_paths": [],
+            "non_negotiables": [],
+            "module_structure": [],
+            "layer_rules": [],
+        }
+        (companion / "pairmode_context.json").write_text(_json.dumps(ctx), encoding="utf-8")
+
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+
+        # Overwrite CLAUDE.md so that one real section body differs
+        from skills.pairmode.scripts.audit import _normalise
+        canonical_text = (
+            _audit_mod.TEMPLATES_DIR / "CLAUDE.md.j2"
+        ).read_text(encoding="utf-8")
+        import re as _re
+        headers = _re.findall(r"^## .+", canonical_text, _re.MULTILINE)
+        assert headers, "CLAUDE.md.j2 must have at least one ## header"
+
+        first_header = headers[0]
+        # Write a version where the first section has completely different content
+        claude_md = tmp_path / "CLAUDE.md"
+        existing = claude_md.read_text(encoding="utf-8")
+        # Replace content under the first header with something clearly different
+        altered = _re.sub(
+            rf"({_re.escape(first_header)}\n+)(.+?)(\n##|\Z)",
+            lambda m: m.group(1) + "COMPLETELY DIFFERENT CONTENT\n" + m.group(3),
+            existing,
+            count=1,
+            flags=_re.DOTALL,
+        )
+        claude_md.write_text(altered, encoding="utf-8")
+
+        result = audit_project(tmp_path)
+
+        # There should be at least one INCONSISTENT item for CLAUDE.md
+        inconsistent_claude = [i for i in result.inconsistent if i.file == "CLAUDE.md"]
+        assert len(inconsistent_claude) > 0, (
+            "Expected INCONSISTENT items for modified CLAUDE.md section, got none"
+        )

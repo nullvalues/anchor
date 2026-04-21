@@ -159,6 +159,11 @@ def _normalise(text: str) -> str:
     return re.sub(r"\s+", " ", text.lower()).strip()
 
 
+def _is_separator_key(key: str) -> bool:
+    """Return True when *key* represents a ``---`` separator line (not a real section)."""
+    return bool(re.match(r'^-+(__\d+)?$', key))
+
+
 # ---------------------------------------------------------------------------
 # Lessons helpers
 # ---------------------------------------------------------------------------
@@ -261,6 +266,8 @@ def audit_project(project_dir: Path, applies_to: str = "all") -> AuditResult:
         if project_sections is None:
             # Entire file is missing — all canonical sections → MISSING
             for section_key, section_body in canonical_sections.items():
+                if _is_separator_key(section_key):
+                    continue
                 lesson_id = _find_lesson_for_file(lessons, dest_rel)
                 result.missing.append(
                     AuditItem(
@@ -278,6 +285,8 @@ def audit_project(project_dir: Path, applies_to: str = "all") -> AuditResult:
 
         # Sections in canonical but not in project → MISSING
         for key in canonical_keys - project_keys:
+            if _is_separator_key(key):
+                continue
             lesson_id = _find_lesson_for_file(lessons, dest_rel)
             result.missing.append(
                 AuditItem(
@@ -290,6 +299,8 @@ def audit_project(project_dir: Path, applies_to: str = "all") -> AuditResult:
 
         # Sections in project but not in canonical → EXTRA
         for key in project_keys - canonical_keys:
+            if _is_separator_key(key):
+                continue
             result.extra.append(
                 AuditItem(
                     file=dest_rel,
@@ -301,6 +312,8 @@ def audit_project(project_dir: Path, applies_to: str = "all") -> AuditResult:
         # Sections in both → check content (skipped when context file is absent)
         if not result.context_missing:
             for key in canonical_keys & project_keys:
+                if _is_separator_key(key):
+                    continue
                 canonical_body = _normalise(canonical_sections[key])
                 project_body = _normalise(project_sections[key])
                 if canonical_body != project_body:
