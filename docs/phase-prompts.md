@@ -1184,6 +1184,49 @@ The lesson_review.py `--approve` flow is the only permitted way to update lesson
 `docs/phase-prompts.md` for new projects; and (3) a Cold Eyes Review (CER) backlog system
 with four-quadrant triage. All three are integrated into bootstrap, audit, and sync.
 
+Prerequisites: L003 is resolved in Story 7.0 before any bootstrap integration work begins.
+L006 (audit override markers) is deferred to Phase 8. L007 is already applied (commit 0518c2f).
+
+---
+
+### Story 7.0 — Bootstrap skip-by-default for existing agent files (L003)
+
+**Acceptance criterion:** Bootstrap skips `.claude/agents/` files that already exist, by
+default. A `--force-agents` flag overwrites them. `SKILL.md` documents that agent files are
+project-owned after first bootstrap. Tests pass.
+
+**Instructions:**
+
+In `skills/pairmode/scripts/bootstrap.py`, split `SCAFFOLD_FILES` into two lists:
+
+```python
+SCAFFOLD_FILES = [...]         # always written (CLAUDE.md, CLAUDE.build.md, docs/)
+AGENT_FILES = [                # skipped if already exist, unless --force-agents
+    (".claude/agents/builder.md", "agents/builder.md.j2"),
+    (".claude/agents/reviewer.md", "agents/reviewer.md.j2"),
+    (".claude/agents/loop-breaker.md", "agents/loop-breaker.md.j2"),
+    (".claude/agents/security-auditor.md", "agents/security-auditor.md.j2"),
+    (".claude/agents/intent-reviewer.md", "agents/intent-reviewer.md.j2"),
+]
+```
+
+Add `--force-agents` flag to the `bootstrap` click command (default: False).
+
+When writing agent files: if the destination exists and `--force-agents` is False, skip with
+a message `"  skipped (project-owned): {dest} — use --force-agents to overwrite"`. If
+`--force-agents` is True, overwrite without prompting (same as current behaviour).
+
+Update `skills/pairmode/SKILL.md` bootstrap section:
+- Document `--force-agents` flag.
+- Add a note: "Agent files in `.claude/agents/` are treated as project-owned after first
+  bootstrap. Bootstrap will not overwrite them on subsequent runs unless `--force-agents` is
+  passed explicitly."
+
+Add tests to `tests/pairmode/test_bootstrap.py`:
+- Agent files are skipped when they already exist (no `--force-agents`).
+- Agent files are overwritten when `--force-agents` is passed.
+- Non-agent scaffold files (CLAUDE.md, docs/) are still written/prompted as before.
+
 ---
 
 ### Story 7.1 — docs/brief.md template and bootstrap integration
@@ -1235,6 +1278,7 @@ Update `skills/pairmode/scripts/bootstrap.py` to:
 
 Add tests to `tests/pairmode/test_templates.py`:
 - Render `brief.md.j2` with sample context; assert "not in scope" section is present.
+- Render `brief.md.j2` with `what=""` and `why=""` — empty fields render gracefully, no crash.
 - Render `CLAUDE.md.j2`; assert "docs/brief.md" appears before "docs/architecture.md".
 - Render `CLAUDE.md.j2`; assert the portability statement is present.
 
@@ -1288,6 +1332,7 @@ Add tests to `tests/pairmode/test_templates.py`:
 - `index.md.j2` renders with one phase; assert phase ID and status columns are present.
 - `phase.md.j2` with both `prev_phase` and `next_phase` renders both navigation links.
 - `phase.md.j2` with `prev_phase=None` omits the left navigation link.
+- `phase.md.j2` with `stories=[]` produces correct stubs section without crashing.
 - Bootstrap writes `docs/phases/index.md` and `docs/phases/phase-1.md` to a new project.
 - Bootstrap does NOT write `docs/phase-prompts.md` to a new project (no such file created).
 
@@ -1384,6 +1429,8 @@ Add tests to `tests/pairmode/test_phase_new.py`:
 - Running twice with same phase ID: warns, does not overwrite, exits 0.
 - Phase 3 after phases 1 and 2 exist: `prev_phase` is populated from phase-2.md title.
 - `docs/phases/` directory is created if it does not exist.
+- Phase N where N-1 exists but has no `# Phase` heading: graceful fallback, `prev_phase`
+  title is "Phase N-1" rather than crashing.
 
 ---
 
@@ -1432,6 +1479,7 @@ Add tests to `tests/pairmode/test_cer.py`:
 - IDs are sequential (CER-001, CER-002, ...) across multiple calls.
 - Running against a project without `backlog.md` creates the file.
 - Multiple calls accumulate entries correctly.
+- `backlog.md` exists but has unexpected content: graceful error, not a crash.
 
 ---
 
@@ -1492,6 +1540,8 @@ Add tests to `tests/pairmode/test_templates.py`:
   in the before-the-first-build-loop section.
 - Render `CLAUDE.build.md.j2`; assert "CER backlog review" heading is present.
 - Render `CLAUDE.build.md.j2`; assert the checkpoint report block contains "CER backlog:".
+- Regression: assert all pre-Phase-7 checkpoint lines still present (build gate, security
+  audit, intent review, git tag) — no regressions from CER step insertion.
 
 ---
 
@@ -1547,50 +1597,21 @@ Add tests to `tests/pairmode/test_sync.py`:
 - `sync_project` creates `docs/brief.md` when MISSING.
 - `sync_project` creates `docs/phases/index.md` when MISSING.
 - `sync_project` creates `docs/cer/backlog.md` when MISSING.
+- Roundtrip: bootstrap fresh project → delete `docs/brief.md` → audit reports MISSING →
+  sync creates it → audit reports clean.
+
+Note: Story 7.7 audit checks are file-existence only. Templates from Stories 7.1–7.3 must
+exist before these tests pass. Build stories in order.
 
 ---
 
-### Story 7.8 — Phase 7 test coverage pass
+⚙️  DEVELOPER ACTION — Sync managed projects with Phase 7 artifacts
 
-**Acceptance criterion:** `PATH=$HOME/.local/bin:$PATH uv run pytest tests/pairmode/ -x -q`
-passes with no failures. All Phase 7 logic has test coverage. No production code changes.
+After all Phase 7 stories pass review, run `/anchor:pairmode sync` against each managed
+project to pick up `docs/brief.md`, `docs/phases/`, and `docs/cer/backlog.md`.
 
-**Instructions:**
-
-Tests only. Review all tests from Stories 7.1–7.7. Fill any gaps:
-
-- Template rendering edge cases:
-  - `brief.md.j2` with `what=""` and `why=""` (empty fields render gracefully)
-  - `phase.md.j2` with `stories=[]` (produces correct stubs section, not a crash)
-  - `backlog.md.j2` with entries in only one quadrant (other three show "*(none)*")
-
-- `phase_new.py` edge cases:
-  - Phase N where N-1 exists but has no `# Phase` heading (graceful fallback: `prev_phase`
-    title is "Phase N-1")
-  - `docs/phases/` does not exist (created automatically)
-
-- `cer.py` edge cases:
-  - `backlog.md` exists but has unexpected content (graceful error, not a crash)
-  - Multiple sequential calls produce monotonically increasing CER IDs
-
-- Audit/sync roundtrip:
-  - Bootstrap a fresh project → delete `docs/brief.md` → audit reports MISSING →
-    sync creates it → audit is clean
-
-- Regression: render `CLAUDE.build.md.j2` and assert the checkpoint summary block still
-  contains all pre-Phase-7 lines (build gate, security audit, intent review, git tag,
-  next-phase prompt) — no regressions from the CER line insertion
-
----
-
-⚙️  DEVELOPER ACTION — Re-bootstrap ud with Phase 7 artifacts
-
-After all Phase 7 stories pass review, run `/anchor:pairmode sync` against `/mnt/work/ud` to
-pick up `docs/brief.md`, `docs/phases/`, and `docs/cer/backlog.md`.
-
-For `docs/brief.md`: populate it from the operator intent in `MIGRATION_SEED.md`. This is the
-anchor-canonical "what and why" summary for the project. `MIGRATION_SEED.md` itself remains as
-an ud-specific source document — it is the project's "also read this" reference, not replaced
-by `docs/brief.md`.
+For each project's `docs/brief.md`: populate the `what` and `why` fields from that project's
+existing operator intent documentation. The brief is the canonical one-page summary; existing
+project-specific source documents remain in place alongside it.
 
 Confirm this action is complete before saying "Continue building Phase 8".

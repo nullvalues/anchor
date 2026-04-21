@@ -1,9 +1,10 @@
-# Anchor Methodology Lessons
+# Lessons
 
-This file is auto-generated from `lessons.json`. Edit `lessons.json` directly
+This file is auto-generated from lessons.json.
+Do not edit manually — capture new lessons via the lesson CLI,
 or use `/anchor:pairmode lesson` to capture a new lesson.
 
-## L001 — Ran audit against cora — a project with pairmode scaffold but no pairmode_context.json
+## L001 — Ran audit against cora — a project with pairmode scaffold but no pairmode_contex
 **Date:** 2026-04-20
 **Status:** applied
 **Learning:** When audit detects no pairmode_context.json, it should emit a prominent warning: 'No pairmode_context.json found — template body comparison will show false INCONSISTENT for all variable-bearing sections. Bootstrap this project with /anchor:pairmode to fix.' MISSING and EXTRA findings remain reliable; INCONSISTENT findings require a context file to be meaningful.
@@ -32,3 +33,8 @@ or use `/anchor:pairmode lesson` to capture a new lesson.
 **Date:** 2026-04-21
 **Status:** captured
 **Learning:** Audit needs a way to mark sections as intentionally overridden. Without that signal, any project that customises its scaffold will permanently live in a noisy INCONSISTENT state, eroding trust in the tool.
+
+## L007 — Dogfood pairmode on multiple projects simultaneously — anchor + ud running at sa
+**Date:** 2026-04-21
+**Status:** applied
+**Learning:** The pipe path must be scoped to the project directory. Each project gets its own pipe derived from an 8-char md5 hash of the project dir. The sidebar reads its own pipe only. Hooks read the pipe_path from .companion/state.json at startup.
