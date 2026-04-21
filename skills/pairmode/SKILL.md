@@ -248,6 +248,8 @@ typically before a major bootstrap or sync campaign across projects.
 This marks the location for the developer to implement the change manually. The comment
 is appended to the end of the template file.
 
+> **Note:** "Applying" a lesson writes a Jinja2 comment block that marks the change location. The developer must open the annotated template to implement the actual change. Lesson `status` is set to `applied` once the annotation is written — not once the template change is implemented. Always review annotated templates after running this command.
+
 **CLI invocation (for direct use / automation):**
 ```bash
 PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scripts/lesson_review.py" \
