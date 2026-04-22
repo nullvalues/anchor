@@ -291,6 +291,34 @@ New projects bootstrapped after Phase 7 never receive `docs/phase-prompts.md`.
 Existing projects using the monolithic format migrate incrementally: each new phase
 becomes its own file; old phases stay in the monolithic doc as a historical record.
 
+
+---
+
+## Documentation currency policy
+
+README.md and relevant docs are updated at every phase checkpoint — not as an afterthought,
+but as a required checkpoint step before tagging.
+
+**What must stay current:**
+- `README.md` — feature list, status, usage/CLI examples, known limitations. If a phase adds
+  or changes a user-facing capability, README reflects it before the checkpoint tag is applied.
+- `docs/architecture.md` — updated by the intent-reviewer at each checkpoint (existing process).
+- `docs/brief.md` — updated when project goals or constraints change.
+- Any `docs/` file explicitly referenced in the phase spec.
+
+**What is exempt:**
+- Internal implementation notes that live in code comments or commit messages.
+- Phase spec files themselves (`docs/phases/phase-N.md`) — these are maintained by the build
+  process, not documentation to be polished.
+
+**Enforcement:** The checkpoint sequence in `CLAUDE.build.md` includes a documentation review
+step before tagging. The reviewer subagent checks that README reflects the phase's shipped
+capabilities. A checkpoint with a stale README is not complete.
+
+**Scope guidance:** Updates should be proportional. A phase that adds a new CLI flag needs one
+line in README. A phase that adds a new workflow needs a paragraph. A phase that only fixes
+internal bugs needs only a "version/status" line if anything.
+
 ---
 
 ## Build commands

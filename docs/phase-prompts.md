@@ -1992,6 +1992,66 @@ covered by Story 8.2. This story covers the structural migration and policy docu
 
 ---
 
+### Story 8.8 — Documentation currency: README update step in checkpoint sequence
+
+**Acceptance criterion:** `CLAUDE.build.md.j2` includes a README/docs review step in the
+checkpoint sequence. The step explicitly lists what to check and blocks tagging if README is
+stale. The reviewer template flags a stale README as a MEDIUM finding. Tests pass.
+
+**Instructions:**
+
+**Part A — Add checkpoint step to `CLAUDE.build.md.j2`:**
+
+Insert a new step **4** (before the current step 4 "CER backlog review"; renumber CER to 5,
+tag to 6, report to 7):
+
+```
+### 4. Documentation review
+
+Before tagging, verify that documentation reflects what was shipped this phase.
+
+Check each of the following:
+- `README.md` — does it reflect all user-facing changes from this phase?
+  Look for: new commands/flags, changed behaviour, new workflow steps, updated status.
+- `docs/brief.md` — still accurate? Update if project goals or constraints changed.
+- Any doc file explicitly referenced in this phase's spec.
+
+If README is stale: update it inline (do not spawn a subagent — this is a write task,
+not a review task). Mark `Doc updates: [list of changes]` in the step 7 report.
+
+If no user-facing changes shipped this phase: mark `Doc updates: none` and proceed.
+```
+
+Update the step 7 report block to show the renumbered steps and confirm
+`Doc updates:` is already present (it was added in Story 7.6 — verify it is still there).
+
+**Part B — Add to reviewer template (`agents/reviewer.md.j2`):**
+
+Add a new universal checklist item after BUILD GATE:
+
+```
+4. DOCUMENTATION CURRENCY
+   Does README.md reflect user-facing changes introduced in this story?
+   New commands, flags, workflows, or changed behaviour not reflected in README is MEDIUM.
+   Internal refactors with no user-facing change: exempt.
+```
+
+**Part C — Update anchor's own `CLAUDE.build.md`:**
+
+Apply the same checkpoint step insertion to `/mnt/work/anchor/CLAUDE.build.md` directly
+(since anchor's orchestrator file is hand-authored and not synced from template automatically).
+Renumber: documentation review = 4, CER backlog = 5, tag = 6, report = 7.
+
+Add tests to `tests/pairmode/test_templates.py`:
+- Render `CLAUDE.build.md.j2`; assert "Documentation review" step heading is present.
+- Render `CLAUDE.build.md.j2`; assert "README" appears in the checkpoint sequence section.
+- Render `agents/reviewer.md.j2`; assert "DOCUMENTATION CURRENCY" is in the checklist.
+- Regression: assert CER backlog review, build gate, security audit, intent review, and tag
+  steps are all still present after renumbering.
+
+
+---
+
 ⚙️  DEVELOPER ACTION — Verify pipe isolation and restart sidebars
 
 After all Phase 8 stories pass review:
