@@ -39,7 +39,6 @@ SCAFFOLD_FILES: list[tuple[str, str]] = [
     ("CLAUDE.build.md", "CLAUDE.build.md.j2"),
     ("docs/brief.md", "docs/brief.md.j2"),
     ("docs/architecture.md", "docs/architecture.md.j2"),
-    ("docs/phase-prompts.md", "docs/phase-prompts.md.j2"),
     ("docs/checkpoints.md", "docs/checkpoints.md.j2"),
 ]
 
@@ -398,6 +397,36 @@ def bootstrap(
         dest = project_path / dest_rel
         try:
             content = _render_template(template_name, context)
+        except jinja2.TemplateError as exc:
+            click.echo(f"  ERROR rendering {template_name}: {exc}", err=True)
+            sys.exit(1)
+        _write_file(dest, content, dry_run=dry_run)
+
+    # ------------------------------------------------------------------
+    # 4a. Write per-phase structure (replaces legacy docs/phase-prompts.md)
+    # ------------------------------------------------------------------
+    phase_index_context = {
+        "project_name": project_name,
+        "phases": [
+            {"id": 1, "title": "— fill in —", "status": "planned", "file": "phase-1.md"},
+        ],
+    }
+    phase_one_context = {
+        "project_name": project_name,
+        "phase_id": 1,
+        "phase_title": "— fill in —",
+        "prev_phase": None,
+        "next_phase": None,
+        "goal": "",
+        "stories": [],
+    }
+    for dest_rel, template_name, ctx in [
+        ("docs/phases/index.md", "docs/phases/index.md.j2", phase_index_context),
+        ("docs/phases/phase-1.md", "docs/phases/phase.md.j2", phase_one_context),
+    ]:
+        dest = project_path / dest_rel
+        try:
+            content = _render_template(template_name, ctx)
         except jinja2.TemplateError as exc:
             click.echo(f"  ERROR rendering {template_name}: {exc}", err=True)
             sys.exit(1)

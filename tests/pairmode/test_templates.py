@@ -771,3 +771,202 @@ class TestCheckpointsMdTemplate:
 
     def test_acceptance_placeholder_present(self):
         assert "Acceptance:" in self.output
+
+
+# ---------------------------------------------------------------------------
+# Per-phase template tests (Story 7.2)
+# ---------------------------------------------------------------------------
+
+INDEX_PHASE_CONTEXT = {
+    "project_name": "myapp",
+    "phases": [
+        {"id": 1, "title": "— fill in —", "status": "planned", "file": "phase-1.md"},
+    ],
+}
+
+PHASE_ONE_CONTEXT = {
+    "project_name": "myapp",
+    "phase_id": 1,
+    "phase_title": "Foundation",
+    "prev_phase": None,
+    "next_phase": None,
+    "goal": "",
+    "stories": [],
+}
+
+PHASE_BOTH_NAV_CONTEXT = {
+    "project_name": "myapp",
+    "phase_id": 2,
+    "phase_title": "Core Features",
+    "prev_phase": {"id": 1, "title": "Foundation"},
+    "next_phase": {"id": 3, "title": "Polish"},
+    "goal": "Build the core feature set.",
+    "stories": [
+        {"id": "2.1", "title": "User auth"},
+        {"id": "2.2", "title": "Dashboard"},
+    ],
+}
+
+
+class TestIndexMdJ2Template:
+    """Tests for docs/phases/index.md.j2"""
+
+    def setup_method(self):
+        self.output = render("docs/phases/index.md.j2", INDEX_PHASE_CONTEXT)
+
+    def test_renders_without_error(self):
+        assert self.output
+
+    def test_project_name_in_title(self):
+        assert "myapp" in self.output
+
+    def test_phase_id_column_present(self):
+        assert "1" in self.output
+
+    def test_status_column_present(self):
+        assert "planned" in self.output
+
+    def test_phase_file_link_present(self):
+        assert "phase-1.md" in self.output
+
+    def test_table_header_present(self):
+        assert "Phase" in self.output
+        assert "Title" in self.output
+        assert "Status" in self.output
+        assert "Link" in self.output
+
+
+class TestPhaseMdJ2BothNavigation:
+    """Tests for docs/phases/phase.md.j2 with both prev and next phase."""
+
+    def setup_method(self):
+        self.output = render("docs/phases/phase.md.j2", PHASE_BOTH_NAV_CONTEXT)
+
+    def test_renders_without_error(self):
+        assert self.output
+
+    def test_left_navigation_link_present(self):
+        # prev_phase is present — left nav arrow must appear
+        assert "← " in self.output
+        assert "Phase 1" in self.output
+        assert "Foundation" in self.output
+
+    def test_right_navigation_link_present(self):
+        # next_phase is present — right nav arrow must appear
+        assert "→" in self.output
+        assert "Phase 3" in self.output
+        assert "Polish" in self.output
+
+    def test_goal_section_present(self):
+        assert "## Goal" in self.output
+        assert "Build the core feature set." in self.output
+
+    def test_stories_rendered(self):
+        assert "### Story 2.1" in self.output
+        assert "User auth" in self.output
+        assert "### Story 2.2" in self.output
+        assert "Dashboard" in self.output
+
+    def test_acceptance_criterion_placeholder(self):
+        assert "**Acceptance criterion:**" in self.output
+
+    def test_instructions_placeholder(self):
+        assert "**Instructions:**" in self.output
+
+    def test_cold_eyes_checklist_section(self):
+        assert "CP-2 Cold-eyes checklist" in self.output
+
+
+class TestPhaseMdJ2NoPrevNavigation:
+    """Tests for docs/phases/phase.md.j2 with no prev_phase (Phase 1 boundary)."""
+
+    def setup_method(self):
+        self.output = render("docs/phases/phase.md.j2", PHASE_ONE_CONTEXT)
+
+    def test_renders_without_error(self):
+        assert self.output
+
+    def test_left_navigation_link_absent(self):
+        # prev_phase is None — left nav arrow must NOT appear
+        assert "← " not in self.output
+
+    def test_cold_eyes_checklist_section(self):
+        assert "CP-1 Cold-eyes checklist" in self.output
+
+
+class TestPhaseMdJ2EmptyStories:
+    """Tests for docs/phases/phase.md.j2 with stories=[]."""
+
+    def setup_method(self):
+        self.output = render("docs/phases/phase.md.j2", PHASE_ONE_CONTEXT)
+
+    def test_renders_without_crashing(self):
+        assert self.output
+
+    def test_no_story_heading_rendered(self):
+        # No stories — no numbered story headings
+        assert "### Story" not in self.output
+
+    def test_stories_section_present(self):
+        # ## Stories header should still appear
+        assert "## Stories" in self.output
+
+
+class TestBootstrapPhasesIntegration:
+    """Integration tests: bootstrap writes per-phase files correctly."""
+
+    def test_bootstrap_writes_phases_index(self, tmp_path):
+        from click.testing import CliRunner
+        from skills.pairmode.scripts.bootstrap import bootstrap
+
+        runner = CliRunner()
+        result = runner.invoke(
+            bootstrap,
+            [
+                "--project-dir", str(tmp_path),
+                "--project-name", "newproject",
+                "--stack", "Python / pytest",
+                "--build-command", "uv run pytest",
+            ],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "docs/phases/index.md").exists()
+
+    def test_bootstrap_writes_phase1(self, tmp_path):
+        from click.testing import CliRunner
+        from skills.pairmode.scripts.bootstrap import bootstrap
+
+        runner = CliRunner()
+        result = runner.invoke(
+            bootstrap,
+            [
+                "--project-dir", str(tmp_path),
+                "--project-name", "newproject",
+                "--stack", "Python / pytest",
+                "--build-command", "uv run pytest",
+            ],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "docs/phases/phase-1.md").exists()
+
+    def test_bootstrap_does_not_write_phase_prompts_md(self, tmp_path):
+        from click.testing import CliRunner
+        from skills.pairmode.scripts.bootstrap import bootstrap
+
+        runner = CliRunner()
+        result = runner.invoke(
+            bootstrap,
+            [
+                "--project-dir", str(tmp_path),
+                "--project-name", "newproject",
+                "--stack", "Python / pytest",
+                "--build-command", "uv run pytest",
+            ],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0, result.output
+        assert not (tmp_path / "docs/phase-prompts.md").exists(), (
+            "Bootstrap must not write docs/phase-prompts.md for new projects"
+        )

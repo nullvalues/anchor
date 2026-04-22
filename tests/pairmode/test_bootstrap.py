@@ -85,8 +85,9 @@ EXPECTED_DEST_PATHS = [
     ".claude/agents/security-auditor.md",
     ".claude/agents/intent-reviewer.md",
     "docs/architecture.md",
-    "docs/phase-prompts.md",
     "docs/checkpoints.md",
+    "docs/phases/index.md",
+    "docs/phases/phase-1.md",
 ]
 
 
@@ -153,10 +154,14 @@ class TestBootstrapCreatesFiles:
         content = (tmp_path / "docs/architecture.md").read_text()
         assert "testproject" in content
 
-    def test_docs_phase_prompts_created(self, tmp_path):
+    def test_docs_phases_index_created(self, tmp_path):
         run_bootstrap(tmp_path)
-        content = (tmp_path / "docs/phase-prompts.md").read_text()
+        content = (tmp_path / "docs/phases/index.md").read_text()
         assert "testproject" in content
+
+    def test_docs_phases_phase1_created(self, tmp_path):
+        run_bootstrap(tmp_path)
+        assert (tmp_path / "docs/phases/phase-1.md").exists()
 
     def test_docs_checkpoints_created(self, tmp_path):
         run_bootstrap(tmp_path)
