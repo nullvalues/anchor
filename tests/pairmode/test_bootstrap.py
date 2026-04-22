@@ -88,6 +88,7 @@ EXPECTED_DEST_PATHS = [
     "docs/checkpoints.md",
     "docs/phases/index.md",
     "docs/phases/phase-1.md",
+    "docs/cer/backlog.md",
 ]
 
 
@@ -873,3 +874,42 @@ class TestAgentFileSkipByDefault:
         result = runner.invoke(bootstrap, ["--help"])
         assert result.exit_code == 0
         assert "force-agents" in result.output
+
+
+# ---------------------------------------------------------------------------
+# CER backlog bootstrap tests (Story 7.3)
+# ---------------------------------------------------------------------------
+
+class TestCerBacklogBootstrap:
+    """Bootstrap writes docs/cer/backlog.md to new projects."""
+
+    def test_bootstrap_writes_cer_backlog(self, tmp_path):
+        result = run_bootstrap(tmp_path)
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "docs/cer/backlog.md").exists(), (
+            "Bootstrap must write docs/cer/backlog.md"
+        )
+
+    def test_cer_backlog_is_non_empty(self, tmp_path):
+        run_bootstrap(tmp_path)
+        content = (tmp_path / "docs/cer/backlog.md").read_text(encoding="utf-8")
+        assert content.strip()
+
+    def test_cer_backlog_has_project_name(self, tmp_path):
+        run_bootstrap(tmp_path)
+        content = (tmp_path / "docs/cer/backlog.md").read_text(encoding="utf-8")
+        assert "testproject" in content
+
+    def test_cer_backlog_has_four_quadrant_headings(self, tmp_path):
+        run_bootstrap(tmp_path)
+        content = (tmp_path / "docs/cer/backlog.md").read_text(encoding="utf-8")
+        assert "## Do Now" in content
+        assert "## Do Later" in content
+        assert "## Do Much Later" in content
+        assert "## Do Never" in content
+
+    def test_cer_backlog_rendered_with_empty_entries(self, tmp_path):
+        """Bootstrap renders backlog with cer_entries=[] — none placeholder rows appear."""
+        run_bootstrap(tmp_path)
+        content = (tmp_path / "docs/cer/backlog.md").read_text(encoding="utf-8")
+        assert "*(none)*" in content

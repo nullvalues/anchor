@@ -8,6 +8,7 @@ confirmation.
 
 from __future__ import annotations
 
+import datetime
 import json
 import pathlib
 import sys
@@ -40,6 +41,7 @@ SCAFFOLD_FILES: list[tuple[str, str]] = [
     ("docs/brief.md", "docs/brief.md.j2"),
     ("docs/architecture.md", "docs/architecture.md.j2"),
     ("docs/checkpoints.md", "docs/checkpoints.md.j2"),
+    ("docs/cer/backlog.md", "docs/cer/backlog.md.j2"),
 ]
 
 # Agent files — skipped if they already exist, unless --force-agents is passed.
@@ -383,6 +385,9 @@ def bootstrap(
         "layer_rules": [],
         # agent templates need this
         "domain_isolation_rule": "",
+        # CER backlog template variables
+        "cer_entries": [],
+        "last_updated": datetime.date.today().isoformat(),
     }
 
     # ------------------------------------------------------------------

@@ -970,3 +970,142 @@ class TestBootstrapPhasesIntegration:
         assert not (tmp_path / "docs/phase-prompts.md").exists(), (
             "Bootstrap must not write docs/phase-prompts.md for new projects"
         )
+
+
+# ---------------------------------------------------------------------------
+# CER backlog template tests (Story 7.3)
+# ---------------------------------------------------------------------------
+
+CER_BACKLOG_CONTEXT_EMPTY = {
+    "project_name": "myapp",
+    "last_updated": "2026-04-21",
+    "cer_entries": [],
+}
+
+CER_BACKLOG_CONTEXT_WITH_ENTRIES = {
+    "project_name": "myapp",
+    "last_updated": "2026-04-21",
+    "cer_entries": [
+        {
+            "id": "CER-001",
+            "quadrant": "do_now",
+            "finding": "SQL injection in user search endpoint",
+            "source": "security-auditor",
+            "date": "2026-04-21",
+            "phase": "7",
+        },
+        {
+            "id": "CER-002",
+            "quadrant": "do_later",
+            "finding": "Add request ID tracing",
+            "source": "internal review",
+            "date": "2026-04-21",
+            "phase": "8",
+        },
+        {
+            "id": "CER-003",
+            "quadrant": "do_much_later",
+            "finding": "Migrate to async DB driver",
+            "source": "architect",
+            "date": "2026-04-21",
+            "phase": "",
+        },
+        {
+            "id": "CER-004",
+            "quadrant": "do_never",
+            "finding": "Rewrite in Rust",
+            "source": "random suggestion",
+            "date": "2026-04-21",
+            "phase": "",
+            "resolution": "Not worth the migration cost given current scale.",
+        },
+    ],
+}
+
+
+class TestCerBacklogTemplateEmpty:
+    """Render backlog.md.j2 with no entries — all four quadrant headings must appear."""
+
+    def setup_method(self):
+        self.output = render("docs/cer/backlog.md.j2", CER_BACKLOG_CONTEXT_EMPTY)
+
+    def test_renders_without_error(self):
+        assert self.output
+
+    def test_project_name_in_title(self):
+        assert "myapp" in self.output
+
+    def test_last_updated_in_output(self):
+        assert "2026-04-21" in self.output
+
+    def test_do_now_heading_present(self):
+        assert "## Do Now" in self.output
+
+    def test_do_later_heading_present(self):
+        assert "## Do Later" in self.output
+
+    def test_do_much_later_heading_present(self):
+        assert "## Do Much Later" in self.output
+
+    def test_do_never_heading_present(self):
+        assert "## Do Never" in self.output
+
+    def test_empty_quadrants_show_none_placeholder(self):
+        assert "*(none)*" in self.output
+
+    def test_do_never_has_resolution_column(self):
+        assert "Resolution" in self.output
+
+
+class TestCerBacklogTemplateWithEntries:
+    """Render backlog.md.j2 with one entry per quadrant — each appears under correct heading."""
+
+    def setup_method(self):
+        self.output = render("docs/cer/backlog.md.j2", CER_BACKLOG_CONTEXT_WITH_ENTRIES)
+
+    def test_renders_without_error(self):
+        assert self.output
+
+    def test_do_now_entry_appears(self):
+        assert "SQL injection in user search endpoint" in self.output
+
+    def test_do_later_entry_appears(self):
+        assert "Add request ID tracing" in self.output
+
+    def test_do_much_later_entry_appears(self):
+        assert "Migrate to async DB driver" in self.output
+
+    def test_do_never_entry_appears(self):
+        assert "Rewrite in Rust" in self.output
+
+    def test_do_now_entry_under_do_now_heading(self):
+        do_now_pos = self.output.index("## Do Now")
+        do_later_pos = self.output.index("## Do Later")
+        entry_pos = self.output.index("SQL injection in user search endpoint")
+        assert do_now_pos < entry_pos < do_later_pos
+
+    def test_do_later_entry_under_do_later_heading(self):
+        do_later_pos = self.output.index("## Do Later")
+        do_much_later_pos = self.output.index("## Do Much Later")
+        entry_pos = self.output.index("Add request ID tracing")
+        assert do_later_pos < entry_pos < do_much_later_pos
+
+    def test_do_much_later_entry_under_do_much_later_heading(self):
+        do_much_later_pos = self.output.index("## Do Much Later")
+        do_never_pos = self.output.index("## Do Never")
+        entry_pos = self.output.index("Migrate to async DB driver")
+        assert do_much_later_pos < entry_pos < do_never_pos
+
+    def test_do_never_entry_under_do_never_heading(self):
+        do_never_pos = self.output.index("## Do Never")
+        entry_pos = self.output.index("Rewrite in Rust")
+        assert do_never_pos < entry_pos
+
+    def test_do_never_resolution_appears(self):
+        assert "Not worth the migration cost given current scale." in self.output
+
+    def test_cer_ids_present(self):
+        assert "CER-001" in self.output
+        assert "CER-002" in self.output
+        assert "CER-003" in self.output
+        assert "CER-004" in self.output
