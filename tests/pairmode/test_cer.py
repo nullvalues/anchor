@@ -290,3 +290,53 @@ def test_next_cer_id_existing() -> None:
         {"id": "CER-003", "finding": "b", "quadrant": "do_later"},
     ]
     assert _next_cer_id(entries) == "CER-004"
+
+
+# ---------------------------------------------------------------------------
+# Test: project_name read from pairmode_context.json
+# ---------------------------------------------------------------------------
+
+def test_project_name_from_context_json(tmp_path: Path) -> None:
+    """When pairmode_context.json has project_name, backlog header uses it."""
+    import json
+
+    context_file = tmp_path / "pairmode_context.json"
+    context_file.write_text(
+        json.dumps({"project_name": "MyAwesomeProject"}), encoding="utf-8"
+    )
+
+    runner = CliRunner()
+    result = _invoke(
+        runner,
+        [
+            "--project-dir", str(tmp_path),
+            "--finding", "Auth bypass on admin route",
+            "--quadrant", "now",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    content = _backlog_path(tmp_path).read_text(encoding="utf-8")
+    assert "MyAwesomeProject" in content
+
+
+# ---------------------------------------------------------------------------
+# Test: project_name fallback when no context.json present
+# ---------------------------------------------------------------------------
+
+def test_project_name_fallback_no_context(tmp_path: Path) -> None:
+    """When pairmode_context.json is absent, heading-parse fallback does not crash."""
+    runner = CliRunner()
+    result = _invoke(
+        runner,
+        [
+            "--project-dir", str(tmp_path),
+            "--finding", "Some finding without context file",
+            "--quadrant", "later",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    content = _backlog_path(tmp_path).read_text(encoding="utf-8")
+    assert "Some finding without context file" in content
+    assert "CER-001" in content

@@ -305,8 +305,8 @@ they are forgotten.
 
 **Inputs expected:**
 - Findings from the CER session (provided interactively or via file).
-- Each finding needs: finding text, quadrant (`do_now` / `do_later` / `do_much_later` /
-  `do_never`), source reviewer name, and an optional phase reference.
+- Each finding needs: finding text, quadrant (`now` / `later` / `much_later` /
+  `never`), source reviewer name, and an optional phase reference.
 
 **What it does:**
 1. Reads existing `docs/cer/backlog.md` if present; creates it from template if absent.
@@ -328,8 +328,8 @@ PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scr
 Optional flags:
 - `--project-dir PATH` — target project root (default: current directory)
 - `--finding TEXT` — finding text (repeatable; if omitted, prompts interactively)
-- `--quadrant QUADRANT` — one of `do_now`, `do_later`, `do_much_later`, `do_never`
-- `--source TEXT` — reviewer name or identifier
+- `--quadrant QUADRANT` — one of `now`, `later`, `much_later`, `never`
+- `--reviewer TEXT` — reviewer name or identifier
 - `--phase TEXT` — phase reference (e.g. "Phase 3")
 
 **Template comment format written by `apply_template_change`:**
