@@ -189,7 +189,7 @@ class TestFullAdoptionJourney:
         text, _ = _remove_first_h2_section(claude_md.read_text(encoding="utf-8"))
         claude_md.write_text(text, encoding="utf-8")
 
-        sync_result = sync_project(tmp_path)
+        sync_result = sync_project(tmp_path, yes=True)
 
         assert sync_result.applied, (
             "SyncResult.applied should be non-empty after applying drift"
@@ -214,7 +214,7 @@ class TestFullAdoptionJourney:
             "The removed heading should not be present before sync"
         )
 
-        sync_project(tmp_path)
+        sync_project(tmp_path, yes=True)
 
         restored_text = claude_md.read_text(encoding="utf-8")
         # The heading text should be back (sync writes the normalised lowercase key as header)
@@ -235,7 +235,7 @@ class TestFullAdoptionJourney:
         text, _ = _remove_first_h2_section(claude_md.read_text(encoding="utf-8"))
         claude_md.write_text(text, encoding="utf-8")
 
-        sync_project(tmp_path)
+        sync_project(tmp_path, yes=True)
 
         result = audit_project(tmp_path)
 
