@@ -39,7 +39,7 @@ In build mode: follow the build loop below. Do not ask clarifying questions befo
 ### Step 1 — Spawn the builder
 
 Spawn the `builder` subagent with:
-- The complete story text (verbatim from phase-prompts.md — do not paraphrase)
+- The complete story text (verbatim from `docs/phases/phase-N.md` (or `docs/phase-prompts.md` for legacy projects) — do not paraphrase)
 - The story ID (e.g. "Story 1.3")
 - A summary of the last 5 git commits
 
@@ -113,10 +113,10 @@ The checkpoint cannot be tagged until all CRITICAL and HIGH findings are resolve
 Spawn the `intent-reviewer` subagent with:
 - Phase number
 - Prior checkpoint git tag (or "initial commit" for Phase 1)
-- Full phase spec text from phase-prompts.md
+- Full phase spec text from `docs/phases/phase-N.md` (or `docs/phase-prompts.md` for legacy projects)
 
 After the intent-reviewer completes:
-- Apply its recommended changes to `/docs/phase-prompts.md` and `/docs/architecture.md`.
+- Apply its recommended changes to `docs/phases/phase-N.md` (or `docs/phase-prompts.md` for legacy projects) and `/docs/architecture.md`.
   Do not apply changes that contradict the core architecture — flag those to the user.
 
 ### 4. CER backlog review

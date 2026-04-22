@@ -1138,3 +1138,77 @@ class TestCerBacklogTemplateWithEntries:
         assert "CER-002" in self.output
         assert "CER-003" in self.output
         assert "CER-004" in self.output
+
+
+# ---------------------------------------------------------------------------
+# Story 8.1 — template migration: phase-prompts.md reference tests
+# ---------------------------------------------------------------------------
+
+import re
+
+
+class TestClaudeBuildMdPhasePromptsReferences:
+    """Assert that CLAUDE.build.md.j2 references phase-prompts.md only as a
+    parenthetical legacy fallback, never as a standalone primary instruction."""
+
+    def setup_method(self):
+        self.output = render("CLAUDE.build.md.j2", CLAUDE_BUILD_MD_CONTEXT)
+
+    def _standalone_references(self) -> list[str]:
+        """Return lines that mention phase-prompts.md outside a parenthetical."""
+        bad = []
+        for line in self.output.splitlines():
+            if "phase-prompts.md" in line:
+                # A parenthetical legacy note contains "(or" and "legacy"
+                if not ("(or" in line and "legacy" in line):
+                    bad.append(line.strip())
+        return bad
+
+    def test_no_standalone_phase_prompts_md_reference(self):
+        """phase-prompts.md must not appear as a standalone read instruction."""
+        bad_lines = self._standalone_references()
+        assert bad_lines == [], (
+            f"Found standalone phase-prompts.md reference(s) in CLAUDE.build.md.j2:\n"
+            + "\n".join(bad_lines)
+        )
+
+    def test_legacy_fallback_notes_present(self):
+        """At least one parenthetical legacy fallback note must exist."""
+        assert "(or" in self.output and "legacy" in self.output and "phase-prompts.md" in self.output
+
+    def test_phase_n_md_is_primary_reference(self):
+        """docs/phases/phase-N.md appears as the primary phase file reference."""
+        assert "docs/phases/phase-N.md" in self.output
+
+
+class TestIntentReviewerPhasePromptsReferences:
+    """Assert that agents/intent-reviewer.md.j2 references phase-prompts.md only
+    as a parenthetical legacy fallback, never as a standalone primary instruction."""
+
+    def setup_method(self):
+        self.output = render("agents/intent-reviewer.md.j2", AGENT_CONTEXT)
+
+    def _standalone_references(self) -> list[str]:
+        """Return lines that mention phase-prompts.md outside a parenthetical."""
+        bad = []
+        for line in self.output.splitlines():
+            if "phase-prompts.md" in line:
+                if not ("(or" in line and "legacy" in line):
+                    bad.append(line.strip())
+        return bad
+
+    def test_no_standalone_phase_prompts_md_reference(self):
+        """phase-prompts.md must not appear as a standalone read instruction."""
+        bad_lines = self._standalone_references()
+        assert bad_lines == [], (
+            f"Found standalone phase-prompts.md reference(s) in intent-reviewer.md.j2:\n"
+            + "\n".join(bad_lines)
+        )
+
+    def test_legacy_fallback_notes_present(self):
+        """At least one parenthetical legacy fallback note must exist."""
+        assert "(or" in self.output and "legacy" in self.output and "phase-prompts.md" in self.output
+
+    def test_phase_n_md_is_primary_reference(self):
+        """docs/phases/phase-N.md appears as the primary phase file reference."""
+        assert "docs/phases/phase-N.md" in self.output
