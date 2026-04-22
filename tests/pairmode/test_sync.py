@@ -30,11 +30,14 @@ def _copy_canonical_files(project_dir: Path) -> None:
 
     Uses the same context that audit_project/sync_project would use when
     pairmode_context.json is absent, so rendered canonical == rendered template.
-    Also creates Phase 7 existence-check placeholder files so they are not flagged MISSING.
+    Also creates Phase 7 scaffold files with non-placeholder content so they are not
+    flagged MISSING or STALE PLACEHOLDER.
     """
-    from skills.pairmode.scripts.audit import EXISTENCE_CHECK_FILES
+    from skills.pairmode.scripts.audit import SCAFFOLD_FILES, _enrich_scaffold_context
 
     context, _ = _load_project_context(project_dir)
+    enriched_context = _enrich_scaffold_context(context)
+
     for dest_rel, template_rel in CANONICAL_FILES:
         dest_path = project_dir / dest_rel
         dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -44,12 +47,70 @@ def _copy_canonical_files(project_dir: Path) -> None:
             rendered = "# placeholder\n"
         dest_path.write_text(rendered, encoding="utf-8")
 
-    # Also create Phase 7 existence-check files so they are not flagged MISSING
-    for dest_rel, _template_rel, _desc in EXISTENCE_CHECK_FILES:
-        dest_path = project_dir / dest_rel
-        if not dest_path.exists():
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            dest_path.write_text("# placeholder\n", encoding="utf-8")
+    # Also create Phase 7 scaffold files with non-placeholder content
+    (project_dir / "docs").mkdir(parents=True, exist_ok=True)
+    (project_dir / "docs" / "phases").mkdir(parents=True, exist_ok=True)
+    (project_dir / "docs" / "cer").mkdir(parents=True, exist_ok=True)
+
+    brief_path = project_dir / "docs" / "brief.md"
+    if not brief_path.exists():
+        brief_path.write_text(
+            "# Brief — testproject\n\n"
+            "## What this project produces\n\n"
+            "A test project for unit tests.\n\n"
+            "## Why it exists\n\n"
+            "To provide a baseline for sync tests.\n\n"
+            "## Constraints\n\n"
+            "_Explicit constraints the operator has placed on scope or approach:_\n\n"
+            "- _(add operator constraints here)_\n\n"
+            "## Not in scope\n\n"
+            "_Things that might seem related but are intentional omissions:_\n\n"
+            "- _(add out-of-scope items here)_\n\n"
+            "## Operator contact\n\n"
+            "_(not specified)_\n",
+            encoding="utf-8",
+        )
+
+    index_path = project_dir / "docs" / "phases" / "index.md"
+    if not index_path.exists():
+        index_path.write_text(
+            "# testproject — Phase Index\n\n"
+            "This document is the index of all build phases for the project.\n"
+            "Each phase has a dedicated file in `docs/phases/`.\n\n"
+            "| Phase | Title | Status | Link |\n"
+            "|-------|-------|--------|------|\n"
+            "| 1 | Phase 1 | in progress | [docs/phases/phase-1.md](docs/phases/phase-1.md) |\n",
+            encoding="utf-8",
+        )
+
+    backlog_path = project_dir / "docs" / "cer" / "backlog.md"
+    if not backlog_path.exists():
+        backlog_path.write_text(
+            "# testproject — Cold-Eyes Review (CER) Backlog\n\n"
+            "*Last updated: 2026-01-01*\n\n"
+            "This file is the structured triage log for findings from external cold-eyes reviews.\n\n"
+            "## Do Now\n\n"
+            "Urgent and important.\n\n"
+            "| ID | Finding | Source | Date | Phase |\n"
+            "|----|---------|--------|------|-------|\n"
+            "| — | *(none)* | — | — | — |\n\n"
+            "## Do Later\n\n"
+            "Important, not urgent.\n\n"
+            "| ID | Finding | Source | Date | Phase |\n"
+            "|----|---------|--------|------|-------|\n"
+            "| — | *(none)* | — | — | — |\n\n"
+            "## Do Much Later\n\n"
+            "Not urgent.\n\n"
+            "| ID | Finding | Source | Date | Phase |\n"
+            "|----|---------|--------|------|-------|\n"
+            "| — | *(none)* | — | — | — |\n\n"
+            "## Do Never\n\n"
+            "Rejected findings.\n\n"
+            "| ID | Finding | Source | Date | Phase | Resolution |\n"
+            "|----|---------|--------|------|-------|------------|\n"
+            "| — | *(none)* | — | — | — | — |\n",
+            encoding="utf-8",
+        )
 
 
 def _write_state(project_dir: Path, extra_fields: dict | None = None) -> None:

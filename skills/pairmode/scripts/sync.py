@@ -25,9 +25,11 @@ from skills.pairmode.scripts.audit import (  # noqa: E402
     TEMPLATES_DIR,
     CANONICAL_FILES,
     EXISTENCE_CHECK_FILES,
+    SCAFFOLD_FILES,
     PAIRMODE_VERSION,
     _split_sections,
     _normalise,
+    _enrich_scaffold_context,
     _load_project_context as _audit_load_project_context,
 )
 
@@ -158,20 +160,6 @@ def _load_project_context(project_dir: Path) -> dict:
     """Load the saved bootstrap context, or return a minimal empty context."""
     context, _ = _audit_load_project_context(project_dir)
     return context
-
-
-def _enrich_context_for_phase7(context: dict) -> dict:
-    """Add Phase 7 template defaults for keys absent from pairmode_context.json."""
-    enriched = dict(context)
-    enriched.setdefault("what", "")
-    enriched.setdefault("why", "")
-    enriched.setdefault("operator_contact", "")
-    enriched.setdefault("cer_entries", [])
-    enriched.setdefault(
-        "phases",
-        [{"id": 1, "title": "Phase 1", "status": "in progress", "file": "docs/phases/phase-1.md"}],
-    )
-    enriched.setdefault("last_updated", date.today().isoformat())
     return enriched
 
 
@@ -196,7 +184,11 @@ def _dest_to_template(dest_rel: str) -> str | None:
     for d, t in CANONICAL_FILES:
         if d == dest_rel:
             return t
-    # Also check existence-check files
+    # Check scaffold files (Phase 7 docs with section-level comparison)
+    for d, t in SCAFFOLD_FILES:
+        if d == dest_rel:
+            return t
+    # Also check existence-check files (now empty, kept for compat)
     for d, t, _desc in EXISTENCE_CHECK_FILES:
         if d == dest_rel:
             return t
@@ -262,8 +254,8 @@ def sync_project(project_dir: Path, applies_to: str = "all", yes: bool = False) 
     for item in audit.inconsistent:
         inconsistent_by_file.setdefault(item.file, []).append(item)
 
-    # Build existence-check file set for quick lookup
-    existence_check_dests = {d for d, _t, _desc in EXISTENCE_CHECK_FILES}
+    # Build scaffold-file set for quick lookup (Phase 7 docs with section-level comparison)
+    scaffold_dests = {d for d, _t in SCAFFOLD_FILES}
 
     # Process files with MISSING items
     for dest_rel, items in missing_by_file.items():
@@ -271,9 +263,9 @@ def sync_project(project_dir: Path, applies_to: str = "all", yes: bool = False) 
         if template_rel is None:
             continue
 
-        # Existence-check files use enriched context with Phase 7 defaults
-        if dest_rel in existence_check_dests:
-            enriched_context = _enrich_context_for_phase7(context)
+        # Scaffold files use enriched context with Phase 7 defaults
+        if dest_rel in scaffold_dests:
+            enriched_context = _enrich_scaffold_context(context)
             rendered_text = _render_template(template_rel, enriched_context) or _get_template_text(template_rel)
             project_path = project_dir / dest_rel
             if not project_path.exists():
@@ -290,6 +282,34 @@ def sync_project(project_dir: Path, applies_to: str = "all", yes: bool = False) 
                 project_path.parent.mkdir(parents=True, exist_ok=True)
                 project_path.write_text(rendered_text, encoding="utf-8")
                 result.applied.append(f"Created {dest_rel} (file was missing)")
+            else:
+                # File exists but is missing some sections — append them
+                canonical_sections = _split_sections(rendered_text)
+                project_text = project_path.read_text(encoding="utf-8")
+                changed = False
+                for item in items:
+                    section_key = item.section
+                    if section_key in canonical_sections:
+                        canonical_body = canonical_sections[section_key]
+                        if not yes:
+                            confirmed = click.confirm(
+                                f"Append section '{section_key}' to {dest_rel}?",
+                                default=False,
+                            )
+                            if not confirmed:
+                                result.skipped.append(
+                                    f"{dest_rel}: section '{section_key}' (user declined)"
+                                )
+                                continue
+                        project_text = _append_section_to_file(
+                            project_text, section_key, canonical_body
+                        )
+                        result.applied.append(
+                            f"Appended section '{section_key}' to {dest_rel}"
+                        )
+                        changed = True
+                if changed:
+                    project_path.write_text(project_text, encoding="utf-8")
             continue
 
         rendered_text = _render_template(template_rel, context) or _get_template_text(template_rel)
@@ -352,7 +372,9 @@ def sync_project(project_dir: Path, applies_to: str = "all", yes: bool = False) 
         if template_rel is None:
             continue
 
-        rendered_text = _render_template(template_rel, context) or _get_template_text(template_rel)
+        # Scaffold files use enriched context with Phase 7 defaults
+        render_context = _enrich_scaffold_context(context) if dest_rel in scaffold_dests else context
+        rendered_text = _render_template(template_rel, render_context) or _get_template_text(template_rel)
         canonical_sections = _split_sections(rendered_text)
         project_path = project_dir / dest_rel
 
