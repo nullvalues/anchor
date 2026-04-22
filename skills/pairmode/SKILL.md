@@ -36,12 +36,18 @@ re-scaffolding a project after a major methodology revision.
 6. Records `pairmode_version` in `.companion/state.json` for future audit comparisons.
 
 **Outputs:**
-- `CLAUDE.md` and `CLAUDE.build.md` at project root.
-- `docs/architecture.md`, `docs/phase-prompts.md`, `docs/checkpoints.md`.
+- `CLAUDE.md` — project methodology guide (root)
+- `CLAUDE.build.md` — build orchestrator instructions (root)
+- `docs/brief.md` — project brief
+- `docs/architecture.md` — architecture reference
+- `docs/checkpoints.md` — checkpoint tag commands
+- `docs/phases/index.md` — phase index table
+- `docs/phases/phase-1.md` — initial phase scaffold
+- `docs/cer/backlog.md` — cold-eyes review triage backlog
+- `.claude/settings.json` — permissions file with spec-derived deny list
+- `.companion/state.json` — companion state with `pairmode_version` set
 - `.claude/agents/builder.md`, `reviewer.md`, `loop-breaker.md`, `security-auditor.md`,
-  `intent-reviewer.md`.
-- `.claude/settings.json` with spec-derived deny list.
-- `.companion/state.json` with `pairmode_version` set.
+  `intent-reviewer.md` — skipped if they already exist unless `--force-agents` is passed.
 
 **CLI invocation:**
 ```bash
@@ -265,6 +271,13 @@ typically before a major bootstrap or sync campaign across projects.
 
 ### `/anchor:pairmode phase-new`
 
+> **Note:** `phase-new` is invoked directly via CLI, not through the pairmode skill dispatcher.
+> Correct invocation:
+> ```bash
+> PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scripts/phase_new.py" \
+>   --project-dir "$(pwd)" --phase-id N
+> ```
+
 **When to use:** When starting a new build phase and you want to lazy-scaffold the phase
 file without interrupting the flow. Run this instead of manually creating a phase file
 from scratch.
@@ -301,6 +314,13 @@ Optional flags:
 ---
 
 ### `/anchor:pairmode cer`
+
+> **Note:** `cer` is invoked directly via CLI, not through the pairmode skill dispatcher.
+> Correct invocation:
+> ```bash
+> PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scripts/cer.py" \
+>   --project-dir "$(pwd)"
+> ```
 
 **When to use:** After a Cold-Eyes Review (CER) session to record findings in the project's
 structured triage backlog. Run this once per review session to capture the findings before
