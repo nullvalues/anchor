@@ -247,9 +247,10 @@ class TestClaudeBuildMdTemplate:
         assert "### 1. Build gate" in self.output
         assert "### 2. Security audit" in self.output
         assert "### 3. Intent review" in self.output
-        assert "### 4. CER backlog review" in self.output
-        assert "### 5. Tag the checkpoint" in self.output
-        assert "### 6. Report" in self.output
+        assert "### 4. Documentation review" in self.output
+        assert "### 5. CER backlog review" in self.output
+        assert "### 6. Tag the checkpoint" in self.output
+        assert "### 7. Report" in self.output
 
     def test_brief_md_before_architecture_md_in_before_loop(self):
         # docs/brief.md must appear before docs/architecture.md in the before-the-first-build-loop section
@@ -268,16 +269,29 @@ class TestClaudeBuildMdTemplate:
         assert "CER backlog:" in self.output
 
     def test_checkpoint_regression_all_pre_phase7_lines_present(self):
-        # Regression: no pre-Phase-7 checkpoint lines removed by CER step insertion
+        # Regression: no pre-Phase-7 checkpoint lines removed by Documentation review step insertion
         assert "### 1. Build gate" in self.output
         assert "### 2. Security audit" in self.output
         assert "### 3. Intent review" in self.output
-        assert "### 5. Tag the checkpoint" in self.output
-        assert "### 6. Report" in self.output
+        assert "### 5. CER backlog review" in self.output
+        assert "### 6. Tag the checkpoint" in self.output
+        assert "### 7. Report" in self.output
         assert "Build gate:" in self.output
         assert "Security audit:" in self.output
         assert "Intent review:" in self.output
         assert "Git tag:" in self.output
+
+    def test_documentation_review_step_present(self):
+        # Story 8.8: Documentation review step must be present in checkpoint sequence
+        assert "### 4. Documentation review" in self.output
+
+    def test_documentation_review_references_readme(self):
+        # Story 8.8: The documentation review step must mention README.md
+        checkpoint_start = self.output.index("## Checkpoint sequence")
+        # Find where the checkpoint sequence ends (next top-level section)
+        next_section_match = self.output.find("\n## ", checkpoint_start + 1)
+        checkpoint_section = self.output[checkpoint_start:next_section_match] if next_section_match != -1 else self.output[checkpoint_start:]
+        assert "README" in checkpoint_section
 
     def test_build_command_substituted(self):
         assert "PATH=$HOME/.local/bin:$PATH uv run pytest tests/pairmode/ -x -q" in self.output
@@ -435,6 +449,7 @@ class TestReviewerAgentTemplate:
         assert "PROTECTED FILES" in self.output
         assert "STORY SCOPE" in self.output
         assert "BUILD GATE" in self.output
+        assert "DOCUMENTATION CURRENCY" in self.output
 
     def test_story_scope_checklist_item(self):
         assert "STORY SCOPE" in self.output
