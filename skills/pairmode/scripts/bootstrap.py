@@ -37,14 +37,19 @@ TEMPLATES_DIR = pathlib.Path(__file__).parent.parent / "templates"
 SCAFFOLD_FILES: list[tuple[str, str]] = [
     ("CLAUDE.md", "CLAUDE.md.j2"),
     ("CLAUDE.build.md", "CLAUDE.build.md.j2"),
+    ("docs/architecture.md", "docs/architecture.md.j2"),
+    ("docs/phase-prompts.md", "docs/phase-prompts.md.j2"),
+    ("docs/checkpoints.md", "docs/checkpoints.md.j2"),
+]
+
+# Agent files — skipped if they already exist, unless --force-agents is passed.
+# These are treated as project-owned after first bootstrap.
+AGENT_FILES: list[tuple[str, str]] = [
     (".claude/agents/builder.md", "agents/builder.md.j2"),
     (".claude/agents/reviewer.md", "agents/reviewer.md.j2"),
     (".claude/agents/loop-breaker.md", "agents/loop-breaker.md.j2"),
     (".claude/agents/security-auditor.md", "agents/security-auditor.md.j2"),
     (".claude/agents/intent-reviewer.md", "agents/intent-reviewer.md.j2"),
-    ("docs/architecture.md", "docs/architecture.md.j2"),
-    ("docs/phase-prompts.md", "docs/phase-prompts.md.j2"),
-    ("docs/checkpoints.md", "docs/checkpoints.md.j2"),
 ]
 
 # Default deny list written into .claude/settings.json
@@ -260,12 +265,19 @@ def _load_product_json(project_dir: pathlib.Path) -> dict:
     default=False,
     help="Print what would be written without writing anything.",
 )
+@click.option(
+    "--force-agents",
+    is_flag=True,
+    default=False,
+    help="Overwrite existing agent files in .claude/agents/ even if already present.",
+)
 def bootstrap(
     project_dir: str,
     project_name: str | None,
     stack: str | None,
     build_command: str | None,
     dry_run: bool,
+    force_agents: bool,
 ) -> None:
     """Bootstrap a pairmode scaffold into PROJECT_DIR."""
 
@@ -368,6 +380,26 @@ def bootstrap(
             click.echo(f"  ERROR rendering {template_name}: {exc}", err=True)
             sys.exit(1)
         _write_file(dest, content, dry_run=dry_run)
+
+    for dest_rel, template_name in AGENT_FILES:
+        dest = project_path / dest_rel
+        if not dry_run and dest.exists() and not force_agents:
+            click.echo(
+                f"  skipped (project-owned): {dest} — use --force-agents to overwrite"
+            )
+            continue
+        try:
+            content = _render_template(template_name, context)
+        except jinja2.TemplateError as exc:
+            click.echo(f"  ERROR rendering {template_name}: {exc}", err=True)
+            sys.exit(1)
+        if force_agents and not dry_run:
+            # Overwrite without prompting — user explicitly requested this
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(content, encoding="utf-8")
+            click.echo(f"  wrote: {dest}")
+        else:
+            _write_file(dest, content, dry_run=dry_run)
 
     # ------------------------------------------------------------------
     # 4.5. Save template context for audit/sync rendering

@@ -9,6 +9,7 @@ from click.testing import CliRunner
 
 from skills.pairmode.scripts.bootstrap import (
     bootstrap,
+    AGENT_FILES,
     DEFAULT_DENY,
     PAIRMODE_VERSION,
     _merge_deny_list,
@@ -749,3 +750,121 @@ class TestPairmodeContextJson:
             catch_exceptions=False,
         )
         assert not (tmp_path / ".companion" / "pairmode_context.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# Agent file skip-by-default tests (Story 7.0 / L003)
+# ---------------------------------------------------------------------------
+
+AGENT_DEST_PATHS = [dest_rel for dest_rel, _ in AGENT_FILES]
+
+
+class TestAgentFileSkipByDefault:
+    """Agent files in .claude/agents/ are project-owned after first bootstrap."""
+
+    def _run_bootstrap_decline_all(self, tmp_path: pathlib.Path, extra_args: list[str] | None = None) -> object:
+        """Run bootstrap declining all overwrite prompts (for non-agent scaffold files)."""
+        runner = CliRunner()
+        base_args = [
+            "--project-dir", str(tmp_path),
+            "--project-name", "testproject",
+            "--stack", "Python / pytest",
+            "--build-command", "uv run pytest",
+        ]
+        args = base_args + (extra_args or [])
+        return runner.invoke(bootstrap, args, input="n\n" * 20, catch_exceptions=False)
+
+    def test_agent_files_skipped_when_already_exist(self, tmp_path):
+        """Second bootstrap without --force-agents must not overwrite existing agent files."""
+        # First run — creates all files
+        run_bootstrap(tmp_path)
+
+        # Mark each agent file with sentinel content
+        for rel in AGENT_DEST_PATHS:
+            (tmp_path / rel).write_text("# project-owned sentinel", encoding="utf-8")
+
+        # Second run — no --force-agents; decline prompts for non-agent files
+        result = self._run_bootstrap_decline_all(tmp_path)
+        assert result.exit_code == 0, result.output
+
+        # All agent files should still have the sentinel content
+        for rel in AGENT_DEST_PATHS:
+            content = (tmp_path / rel).read_text(encoding="utf-8")
+            assert content == "# project-owned sentinel", (
+                f"{rel} was overwritten on second bootstrap without --force-agents"
+            )
+
+    def test_skip_message_printed_for_existing_agent_files(self, tmp_path):
+        """Bootstrap should print a 'skipped (project-owned)' message for each skipped agent file."""
+        run_bootstrap(tmp_path)
+
+        result = self._run_bootstrap_decline_all(tmp_path)
+        assert result.exit_code == 0, result.output
+        assert "skipped (project-owned)" in result.output
+
+    def test_skip_message_mentions_force_agents(self, tmp_path):
+        """The skip message must tell the user to use --force-agents."""
+        run_bootstrap(tmp_path)
+
+        result = self._run_bootstrap_decline_all(tmp_path)
+        assert "--force-agents" in result.output
+
+    def test_agent_files_overwritten_with_force_agents(self, tmp_path):
+        """--force-agents causes existing agent files to be overwritten."""
+        run_bootstrap(tmp_path)
+
+        # Mark each agent file with sentinel content
+        for rel in AGENT_DEST_PATHS:
+            (tmp_path / rel).write_text("# project-owned sentinel", encoding="utf-8")
+
+        # Second run with --force-agents; decline prompts for non-agent files
+        result = self._run_bootstrap_decline_all(tmp_path, extra_args=["--force-agents"])
+        assert result.exit_code == 0, result.output
+
+        # All agent files should have been overwritten (sentinel gone, project_name present)
+        for rel in AGENT_DEST_PATHS:
+            content = (tmp_path / rel).read_text(encoding="utf-8")
+            assert "# project-owned sentinel" not in content, (
+                f"{rel} was not overwritten despite --force-agents"
+            )
+
+    def test_non_agent_scaffold_files_always_written(self, tmp_path):
+        """CLAUDE.md and docs/ files follow normal prompt-based overwrite logic (not agent skip)."""
+        run_bootstrap(tmp_path)
+
+        # Modify CLAUDE.md
+        (tmp_path / "CLAUDE.md").write_text("custom content", encoding="utf-8")
+
+        # Second run — agent files skipped, but CLAUDE.md prompts for overwrite.
+        # Simulate user saying "y" to overwrite CLAUDE.md.
+        runner = CliRunner()
+        result = runner.invoke(
+            bootstrap,
+            [
+                "--project-dir", str(tmp_path),
+                "--project-name", "testproject",
+                "--stack", "Python / pytest",
+                "--build-command", "uv run pytest",
+            ],
+            input="y\n" * 20,
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0, result.output
+        # CLAUDE.md should have been overwritten (user said y)
+        content = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
+        assert "testproject" in content
+        assert "custom content" not in content
+
+    def test_agent_files_created_on_first_bootstrap(self, tmp_path):
+        """On first bootstrap (no prior files), agent files are always written."""
+        result = run_bootstrap(tmp_path)
+        assert result.exit_code == 0, result.output
+        for rel in AGENT_DEST_PATHS:
+            assert (tmp_path / rel).exists(), f"Agent file {rel} not created on first bootstrap"
+
+    def test_force_agents_flag_in_help(self):
+        """--force-agents flag must appear in help output."""
+        runner = CliRunner()
+        result = runner.invoke(bootstrap, ["--help"])
+        assert result.exit_code == 0
+        assert "force-agents" in result.output

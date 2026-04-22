@@ -51,6 +51,23 @@ PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scr
 ```
 Note: `--project-dir` is the only required flag. Other values (project name, stack, etc.) are read from `.companion/product.json` or prompted interactively.
 
+**Agent file ownership:**
+Agent files in `.claude/agents/` are treated as project-owned after first bootstrap. Bootstrap will not overwrite them on subsequent runs unless `--force-agents` is passed explicitly. This preserves project-specific customisations made to agent definitions after initial scaffolding.
+
+To overwrite existing agent files:
+```bash
+PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scripts/bootstrap.py" \
+  --project-dir "$(pwd)" --force-agents
+```
+
+**Flags:**
+- `--project-dir PATH` — target project root (default: current directory)
+- `--project-name NAME` — project name (read from `product.json` or prompted if omitted)
+- `--stack TEXT` — technology stack (prompted if omitted)
+- `--build-command TEXT` — build/test command (inferred from project files or prompted if omitted)
+- `--dry-run` — print what would be written without writing anything
+- `--force-agents` — overwrite existing agent files in `.claude/agents/` (default: skip if present)
+
 ---
 
 ### `/anchor:pairmode audit`
