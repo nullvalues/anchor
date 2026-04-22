@@ -71,11 +71,13 @@ class TestClaudeMdTemplate:
     def test_renders_without_error(self):
         assert self.output
 
-    def test_project_context_block(self):
+    def test_project_name_in_title(self):
         assert "myapp" in self.output
-        assert "a sample web application for testing" in self.output
-        assert "Python 3.11+ / FastAPI / PostgreSQL" in self.output
-        assert "multi-tenant SaaS with organisation and workspace hierarchy" in self.output
+
+    def test_read_before_any_task_section(self):
+        assert "## Read before any task" in self.output
+        assert "docs/brief.md" in self.output
+        assert "docs/architecture.md" in self.output
 
     def test_session_modes_section_present(self):
         assert "## Session modes" in self.output
@@ -125,6 +127,86 @@ class TestClaudeMdTemplate:
     def test_story_test_verification_section(self):
         assert "## Story test verification" in self.output
         assert "uv run pytest tests/pairmode/" in self.output
+
+    def test_brief_md_appears_before_architecture_md(self):
+        brief_pos = self.output.index("docs/brief.md")
+        arch_pos = self.output.index("docs/architecture.md")
+        assert brief_pos < arch_pos
+
+    def test_portability_statement_present(self):
+        assert "cold-start" in self.output
+
+
+# ---------------------------------------------------------------------------
+# brief.md.j2 tests
+# ---------------------------------------------------------------------------
+
+BRIEF_MD_CONTEXT = {
+    "project_name": "myapp",
+    "project_description": "a sample web application for testing",
+    "stack": "Python 3.11+ / FastAPI / PostgreSQL",
+    "what": "A REST API that manages user accounts and permissions for enterprise clients.",
+    "why": "Existing solutions lack fine-grained role management required by our enterprise customers.",
+    "operator_contact": "alice@example.com",
+}
+
+BRIEF_MD_EMPTY_CONTEXT = {
+    "project_name": "myapp",
+    "project_description": "",
+    "stack": "Python",
+    "what": "",
+    "why": "",
+    "operator_contact": "",
+}
+
+
+class TestBriefMdTemplate:
+    def setup_method(self):
+        self.output = render("docs/brief.md.j2", BRIEF_MD_CONTEXT)
+
+    def test_renders_without_error(self):
+        assert self.output
+
+    def test_project_name_in_title(self):
+        assert "myapp" in self.output
+
+    def test_not_in_scope_section_present(self):
+        assert "Not in scope" in self.output
+
+    def test_what_section_present(self):
+        assert "What this project produces" in self.output
+        assert "A REST API that manages user accounts" in self.output
+
+    def test_why_section_present(self):
+        assert "Why it exists" in self.output
+        assert "fine-grained role management" in self.output
+
+    def test_operator_contact_present(self):
+        assert "alice@example.com" in self.output
+
+    def test_constraints_section_present(self):
+        assert "Constraints" in self.output
+
+    def test_portability_statement_present(self):
+        assert "cold-start" in self.output
+        assert "docs/brief.md" in self.output
+        assert "docs/architecture.md" in self.output
+
+
+class TestBriefMdTemplateEmptyFields:
+    def test_renders_gracefully_with_empty_what_and_why(self):
+        output = render("docs/brief.md.j2", BRIEF_MD_EMPTY_CONTEXT)
+        assert output
+        assert "Not in scope" in output
+        assert "myapp" in output
+
+    def test_empty_what_shows_placeholder(self):
+        output = render("docs/brief.md.j2", BRIEF_MD_EMPTY_CONTEXT)
+        assert "not yet specified" in output
+
+    def test_empty_why_shows_placeholder(self):
+        output = render("docs/brief.md.j2", BRIEF_MD_EMPTY_CONTEXT)
+        assert "not yet specified" in output
 
 
 # ---------------------------------------------------------------------------
