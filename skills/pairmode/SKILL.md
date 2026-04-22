@@ -31,10 +31,9 @@ re-scaffolding a project after a major methodology revision.
 3. Renders all Jinja2 templates in `skills/pairmode/templates/` against the project context.
 4. Generates the deny list in `.claude/settings.json` from spec non-negotiables, each rule
    annotated with a comment linking it to the source non-negotiable.
-5. Presents the full list of files that will be written and prompts for confirmation before
-   writing anything.
-6. Writes the scaffold only after explicit user approval.
-7. Records `pairmode_version` in `.companion/state.json` for future audit comparisons.
+5. Writes scaffold files immediately on a fresh project. For each file that already exists,
+   prompts for confirmation before overwriting that individual file.
+6. Records `pairmode_version` in `.companion/state.json` for future audit comparisons.
 
 **Outputs:**
 - `CLAUDE.md` and `CLAUDE.build.md` at project root.
@@ -64,7 +63,11 @@ PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scr
 - `--project-dir PATH` — target project root (default: current directory)
 - `--project-name NAME` — project name (read from `product.json` or prompted if omitted)
 - `--stack TEXT` — technology stack (prompted if omitted)
+- `--what TEXT` — what the project produces (prompted in TTY; blank left as-is in non-TTY with warning)
+- `--why TEXT` — why the project exists (prompted in TTY; blank left as-is in non-TTY with warning)
 - `--build-command TEXT` — build/test command (inferred from project files or prompted if omitted)
+- `--phase-title TEXT` — title for the initial `docs/phases/phase-1.md` (prompted in TTY if omitted; blank allowed)
+- `--phase-goal TEXT` — goal for the initial `docs/phases/phase-1.md` (prompted in TTY if omitted; blank allowed)
 - `--dry-run` — print what would be written without writing anything
 - `--force-agents` — overwrite existing agent files in `.claude/agents/` (default: skip if present)
 
