@@ -247,8 +247,37 @@ class TestClaudeBuildMdTemplate:
         assert "### 1. Build gate" in self.output
         assert "### 2. Security audit" in self.output
         assert "### 3. Intent review" in self.output
-        assert "### 4. Tag the checkpoint" in self.output
-        assert "### 5. Report" in self.output
+        assert "### 4. CER backlog review" in self.output
+        assert "### 5. Tag the checkpoint" in self.output
+        assert "### 6. Report" in self.output
+
+    def test_brief_md_before_architecture_md_in_before_loop(self):
+        # docs/brief.md must appear before docs/architecture.md in the before-the-first-build-loop section
+        section_start = self.output.index("## Before the first build loop")
+        # Find the next major section after the before-loop section
+        build_loop_start = self.output.index("## Build loop")
+        before_loop_section = self.output[section_start:build_loop_start]
+        brief_pos = before_loop_section.index("docs/brief.md")
+        arch_pos = before_loop_section.index("docs/architecture.md")
+        assert brief_pos < arch_pos
+
+    def test_cer_backlog_review_heading_present(self):
+        assert "CER backlog review" in self.output
+
+    def test_checkpoint_report_contains_cer_backlog_line(self):
+        assert "CER backlog:" in self.output
+
+    def test_checkpoint_regression_all_pre_phase7_lines_present(self):
+        # Regression: no pre-Phase-7 checkpoint lines removed by CER step insertion
+        assert "### 1. Build gate" in self.output
+        assert "### 2. Security audit" in self.output
+        assert "### 3. Intent review" in self.output
+        assert "### 5. Tag the checkpoint" in self.output
+        assert "### 6. Report" in self.output
+        assert "Build gate:" in self.output
+        assert "Security audit:" in self.output
+        assert "Intent review:" in self.output
+        assert "Git tag:" in self.output
 
     def test_build_command_substituted(self):
         assert "PATH=$HOME/.local/bin:$PATH uv run pytest tests/pairmode/ -x -q" in self.output
