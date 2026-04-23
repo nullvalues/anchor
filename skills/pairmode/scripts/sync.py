@@ -160,7 +160,6 @@ def _load_project_context(project_dir: Path) -> dict:
     """Load the saved bootstrap context, or return a minimal empty context."""
     context, _ = _audit_load_project_context(project_dir)
     return context
-    return enriched
 
 
 def _render_template(template_rel: str, context: dict) -> str:

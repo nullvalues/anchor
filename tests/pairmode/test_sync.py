@@ -996,3 +996,22 @@ class TestSyncFormatOutputSkipped:
         assert hasattr(result, "skipped")
         assert isinstance(result.skipped, list)
         assert result.skipped == []
+
+
+# ---------------------------------------------------------------------------
+# Story 9.0 — dead code removal
+# ---------------------------------------------------------------------------
+
+
+class TestNoDeadCodeInLoadProjectContext:
+    """The orphaned 'return enriched' dead code was removed from _load_project_context."""
+
+    def test_enriched_not_in_source(self) -> None:
+        """Source-level check: 'enriched' does not appear in _load_project_context."""
+        import inspect
+        from skills.pairmode.scripts import sync
+
+        source = inspect.getsource(sync._load_project_context)
+        assert "enriched" not in source, (
+            "Dead code 'return enriched' must not exist in _load_project_context"
+        )
