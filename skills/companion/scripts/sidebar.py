@@ -1505,6 +1505,9 @@ def main():
 
                         elif event_type == "mode_change":
                             mode = event.get("mode", "")
+                            VALID_MODES = {"planning", "implementation"}
+                            if mode not in VALID_MODES:
+                                mode = "planning"  # safe fallback
                             if mode:
                                 _state_path = Path(STATE_PATH)
                                 try:
@@ -1517,6 +1520,16 @@ def main():
                         elif event_type == "session_end":
                             stop_live()
                             console.print(f"[dim]{datetime.now().strftime('%H:%M:%S')} ← session ending...[/dim]")
+                            # Write session-end state synchronously before thread
+                            try:
+                                _st = json.loads(_state_path.read_text()) if _state_path.exists() else {}
+                                _st["last_session_end"] = event.get("last_session_end", "")
+                                _st["last_session_id"] = event.get("session_id", "")
+                                _st["last_session_closed"] = event.get("last_session_closed", True)
+                                _st["mode"] = event.get("mode", "planning")
+                                _state_path.write_text(json.dumps(_st, indent=2))
+                            except Exception:
+                                pass
                             threading.Thread(target=handle_session_end, args=(event,), daemon=True).start()
 
                         # spec_exception has type= (not event=) — persist it and record in spec
