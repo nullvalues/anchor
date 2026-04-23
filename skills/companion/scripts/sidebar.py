@@ -1503,6 +1503,17 @@ def main():
                             if _current_story:
                                 console.print(build_story_panel(_current_story))
 
+                        elif event_type == "mode_change":
+                            mode = event.get("mode", "")
+                            if mode:
+                                _state_path = Path(STATE_PATH)
+                                try:
+                                    _st = json.loads(_state_path.read_text()) if _state_path.exists() else {}
+                                except Exception:
+                                    _st = {}
+                                _st["mode"] = mode
+                                _state_path.write_text(json.dumps(_st, indent=2))
+
                         elif event_type == "session_end":
                             stop_live()
                             console.print(f"[dim]{datetime.now().strftime('%H:%M:%S')} ← session ending...[/dim]")
