@@ -97,7 +97,7 @@ def _append_index_row(index_path: Path, phase_id: int, phase_title: str) -> None
     index_path.write_text("".join(new_lines), encoding="utf-8")
 
 
-def _create_index(index_path: Path, phase_id: int, phase_title: str) -> None:
+def _create_index(index_path: Path, phase_id: int, phase_title: str, project_name: str = "project") -> None:
     """Create a brand-new index.md from the index template."""
     env = _load_env()
     tmpl = env.get_template("docs/phases/index.md.j2")
@@ -109,8 +109,7 @@ def _create_index(index_path: Path, phase_id: int, phase_title: str) -> None:
             "file": f"phase-{phase_id}.md",
         }
     ]
-    # project_name is unknown here; use a placeholder
-    content = tmpl.render(project_name="project", phases=phases)
+    content = tmpl.render(project_name=project_name, phases=phases)
     index_path.write_text(content, encoding="utf-8")
 
 
@@ -243,7 +242,7 @@ def phase_new(
             for line in index_rendered.splitlines()[:20]:
                 click.echo(line)
         else:
-            _create_index(index_path, phase_id, title or f"Phase {phase_id}")
+            _create_index(index_path, phase_id, title or f"Phase {phase_id}", project_name)
             click.echo(f"Created {index_path.relative_to(project_path)}")
 
 

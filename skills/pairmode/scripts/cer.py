@@ -137,6 +137,11 @@ def _parse_entries_from_backlog(content: str) -> list[dict]:
     return entries
 
 
+def _escape_table_cell(text: str) -> str:
+    """Escape pipe characters so they don't corrupt markdown table cells."""
+    return text.replace("|", "\\|")
+
+
 def _next_cer_id(entries: list[dict]) -> str:
     """Determine the next sequential CER-NNN id."""
     max_num = 0
@@ -191,8 +196,8 @@ def append_finding(
 
     entry: dict = {
         "id": new_id,
-        "finding": finding,
-        "source": reviewer,
+        "finding": _escape_table_cell(finding),
+        "source": _escape_table_cell(reviewer),
         "date": today,
         "quadrant": quadrant,
     }
@@ -205,7 +210,7 @@ def append_finding(
 
     # Resolve project name: pairmode_context.json > heading parse > default
     project_name = "Project"
-    context_path = project_dir / "pairmode_context.json"
+    context_path = project_dir / ".companion" / "pairmode_context.json"
     if context_path.exists():
         import json as _json
         try:
