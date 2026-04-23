@@ -64,6 +64,10 @@ DEFAULT_DENY: list[str] = [
     "Write(.claude/agents/**)",
     "Edit(docs/architecture.md)",
     "Write(docs/architecture.md)",
+    "Edit(docs/phases/**)",
+    "Write(docs/phases/**)",
+    "Edit(docs/brief.md)",
+    "Write(docs/brief.md)",
 ]
 
 # Universal checklist items always included in templates

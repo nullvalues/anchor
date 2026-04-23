@@ -1019,3 +1019,37 @@ class TestNonTtyWhatWhyWarning:
         assert result.exit_code == 0, result.output
         content = (tmp_path / "docs/brief.md").read_text(encoding="utf-8")
         assert "something useful" in content
+
+
+# ---------------------------------------------------------------------------
+# Story 9.4: DEFAULT_DENY scope tests for docs/phases and docs/brief.md
+# ---------------------------------------------------------------------------
+
+class TestDefaultDenyScopeDocs:
+    """DEFAULT_DENY must protect docs/phases/** and docs/brief.md but not operational files."""
+
+    def test_edit_docs_phases_glob_in_default_deny(self):
+        assert "Edit(docs/phases/**)" in DEFAULT_DENY
+
+    def test_write_docs_phases_glob_in_default_deny(self):
+        assert "Write(docs/phases/**)" in DEFAULT_DENY
+
+    def test_edit_docs_brief_in_default_deny(self):
+        assert "Edit(docs/brief.md)" in DEFAULT_DENY
+
+    def test_write_docs_brief_in_default_deny(self):
+        assert "Write(docs/brief.md)" in DEFAULT_DENY
+
+    def test_blanket_edit_docs_not_in_default_deny(self):
+        assert "Edit(docs/**)" not in DEFAULT_DENY
+
+    def test_blanket_write_docs_not_in_default_deny(self):
+        assert "Write(docs/**)" not in DEFAULT_DENY
+
+    def test_edit_checkpoints_not_in_default_deny(self):
+        """docs/checkpoints.md is an operational file — must not be denied."""
+        assert "Edit(docs/checkpoints.md)" not in DEFAULT_DENY
+
+    def test_edit_cer_backlog_not_in_default_deny(self):
+        """docs/cer/backlog.md is an operational file — must not be denied."""
+        assert "Edit(docs/cer/backlog.md)" not in DEFAULT_DENY
