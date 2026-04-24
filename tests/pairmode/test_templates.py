@@ -1560,3 +1560,49 @@ class TestReconstructionMdTemplate:
     def test_project_name_in_title(self):
         output = render_lenient("docs/reconstruction.md.j2", {"project_name": "TestProject"})
         assert "TestProject" in output
+
+
+# ---------------------------------------------------------------------------
+# Story 12.1 — RECONSTRUCTION.md.j2 scoring template tests
+# ---------------------------------------------------------------------------
+
+class TestReconstructionReportTemplate:
+    """Tests for RECONSTRUCTION.md.j2 — the report a reconstruction agent produces."""
+
+    def test_renders_without_error_empty_context(self):
+        output = render_lenient("RECONSTRUCTION.md.j2", {})
+        assert output
+
+    def test_ideology_adherence_section_present(self):
+        output = render_lenient("RECONSTRUCTION.md.j2", {})
+        assert "## Ideology adherence" in output
+
+    def test_constraint_compliance_section_present(self):
+        output = render_lenient("RECONSTRUCTION.md.j2", {})
+        assert "## Constraint compliance" in output
+
+    def test_comparison_rubric_scores_section_present(self):
+        output = render_lenient("RECONSTRUCTION.md.j2", {})
+        assert "## Comparison rubric scores" in output
+
+    def test_summary_verdict_section_present(self):
+        output = render_lenient("RECONSTRUCTION.md.j2", {})
+        assert "## Summary verdict" in output
+
+    def test_conviction_heading_renders_when_provided(self):
+        output = render_lenient("RECONSTRUCTION.md.j2", {"convictions": ["We prefer X over Y"]})
+        assert "### Conviction: We prefer X over Y" in output
+
+    def test_comparison_dimension_name_and_description_render(self):
+        ctx = {
+            "comparison_dimensions": [
+                {"name": "Decision fidelity", "description": "desc"}
+            ]
+        }
+        output = render_lenient("RECONSTRUCTION.md.j2", ctx)
+        assert "Decision fidelity" in output
+        assert "desc" in output
+
+    def test_project_name_in_title(self):
+        output = render_lenient("RECONSTRUCTION.md.j2", {"project_name": "TestProject"})
+        assert "TestProject" in output
