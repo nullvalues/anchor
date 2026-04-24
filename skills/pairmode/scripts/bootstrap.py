@@ -254,6 +254,62 @@ def _load_product_json(project_dir: pathlib.Path) -> dict:
     return {}
 
 
+def _ideology_capture_flow() -> dict:
+    """Prompt the developer for ideology content. Returns template context dict."""
+    convictions: list[str] = []
+    for i in range(1, 4):
+        value = click.prompt(
+            f"\nIdeology capture — core conviction #{i}\n"
+            f"What does this project believe? (e.g. \"we prefer X over Y because Z\")\n"
+            f"Enter conviction or press Enter to skip",
+            default="",
+            show_default=False,
+        ).strip()
+        if not value:
+            break
+        convictions.append(value)
+
+    value_hierarchy_entry = click.prompt(
+        "\nValue hierarchy — top entry\n"
+        "When two values conflict, which wins?\n"
+        "Enter or press Enter to skip",
+        default="",
+        show_default=False,
+    ).strip()
+    value_hierarchy = [value_hierarchy_entry] if value_hierarchy_entry else []
+
+    constraint_rule = click.prompt(
+        "\nAccepted constraint — most important rule\n"
+        "What must this system never do?\n"
+        "Enter constraint rule or press Enter to skip",
+        default="",
+        show_default=False,
+    ).strip()
+    constraints: list[dict] = []
+    if constraint_rule:
+        constraints.append({
+            "name": "Constraint 1",
+            "rule": constraint_rule,
+            "protects": "_(to be filled in)_",
+            "rationale": "_(to be filled in)_",
+        })
+
+    must_preserve_entry = click.prompt(
+        "\nReconstruction — what must survive any implementation?\n"
+        "Enter or press Enter to skip",
+        default="",
+        show_default=False,
+    ).strip()
+    must_preserve = [must_preserve_entry] if must_preserve_entry else []
+
+    return {
+        "convictions": convictions,
+        "value_hierarchy": value_hierarchy,
+        "constraints": constraints,
+        "must_preserve": must_preserve,
+    }
+
+
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
@@ -297,6 +353,22 @@ def _load_product_json(project_dir: pathlib.Path) -> dict:
     default=False,
     help="Overwrite existing agent files in .claude/agents/ even if already present.",
 )
+@click.option(
+    "--ideology-skip",
+    is_flag=True,
+    default=False,
+    help="Skip guided ideology capture; write placeholder ideology.md.",
+)
+@click.option(
+    "--conviction",
+    multiple=True,
+    help="Core conviction (repeatable). Bypasses TTY prompt.",
+)
+@click.option(
+    "--constraint",
+    multiple=True,
+    help="Key constraint rule (repeatable). Bypasses TTY prompt.",
+)
 def bootstrap(
     project_dir: str,
     project_name: str | None,
@@ -308,6 +380,9 @@ def bootstrap(
     phase_goal: str | None,
     dry_run: bool,
     force_agents: bool,
+    ideology_skip: bool,
+    conviction: tuple[str, ...],
+    constraint: tuple[str, ...],
 ) -> None:
     """Bootstrap a pairmode scaffold into PROJECT_DIR."""
 
@@ -372,6 +447,38 @@ def bootstrap(
 
     # test_command is derived from build_command for now
     test_command = build_command
+
+    # ------------------------------------------------------------------
+    # 1b. Ideology context: CLI flags → TTY prompt → non-TTY placeholder
+    # ------------------------------------------------------------------
+    if conviction or constraint:
+        # CLI flags provided — use them directly, skip prompting
+        ideology_context: dict = {
+            "convictions": list(conviction),
+            "value_hierarchy": [],
+            "constraints": [
+                {
+                    "name": f"Constraint {i + 1}",
+                    "rule": rule,
+                    "protects": "_(to be filled in)_",
+                    "rationale": "_(to be filled in)_",
+                }
+                for i, rule in enumerate(constraint)
+            ],
+            "must_preserve": [],
+        }
+    elif sys.stdin.isatty() and not ideology_skip:
+        ideology_context = _ideology_capture_flow()
+    else:
+        ideology_context = {}
+        if not ideology_skip:
+            click.echo(
+                "warning: non-interactive mode — docs/ideology.md will be written as "
+                "placeholder.\n"
+                "         Pass --conviction or --constraint flags to populate, "
+                "or edit docs/ideology.md after bootstrap.",
+                err=True,
+            )
 
     # ------------------------------------------------------------------
     # 2. Derive spec-based checklist and deny list (if spec present)
@@ -439,9 +546,9 @@ def bootstrap(
         "cer_entries": [],
         "last_updated": datetime.date.today().isoformat(),
         # ideology.md.j2 variables — all default to empty lists (renders placeholders)
-        "convictions": [],
-        "value_hierarchy": [],
-        "constraints": [],
+        "convictions": ideology_context.get("convictions", []),
+        "value_hierarchy": ideology_context.get("value_hierarchy", []),
+        "constraints": ideology_context.get("constraints", []),
         "fingerprints": [],
         # must_preserve is defined above (shared with brief.md.j2) — empty string is falsy
         # so ideology.md.j2's {% if must_preserve %} guard works correctly
@@ -449,6 +556,9 @@ def bootstrap(
         "free_to_change": [],
         "comparison_dimensions": [],
     }
+    # Merge ideology_context must_preserve into context (overrides the empty-string default)
+    if ideology_context.get("must_preserve"):
+        context["must_preserve"] = ideology_context["must_preserve"]
 
     # ------------------------------------------------------------------
     # 4. Render and write scaffold files

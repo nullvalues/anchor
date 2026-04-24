@@ -66,6 +66,17 @@ PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scr
   --project-dir "$(pwd)" --force-agents
 ```
 
+**Ideology capture (TTY mode):**
+When bootstrap is run interactively (TTY), it automatically prompts for ideology content before
+writing `docs/ideology.md`:
+1. Up to 3 core convictions (each skippable with blank input)
+2. Top value hierarchy entry (skippable)
+3. Most important constraint rule (skippable)
+4. Must-preserve reconstruction element (skippable)
+
+In non-TTY mode, `docs/ideology.md` is written as a placeholder with a warning. Pass `--conviction`
+or `--constraint` flags to populate it non-interactively.
+
 **Flags:**
 - `--project-dir PATH` — target project root (default: current directory)
 - `--project-name NAME` — project name (read from `product.json` or prompted if omitted)
@@ -77,6 +88,9 @@ PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scr
 - `--phase-goal TEXT` — goal for the initial `docs/phases/phase-1.md` (prompted in TTY if omitted; blank allowed)
 - `--dry-run` — print what would be written without writing anything
 - `--force-agents` — overwrite existing agent files in `.claude/agents/` (default: skip if present)
+- `--ideology-skip` — skip guided ideology capture; write placeholder `docs/ideology.md`
+- `--conviction TEXT` — core conviction (repeatable); bypasses TTY prompt, populates ideology.md directly
+- `--constraint TEXT` — key constraint rule (repeatable); bypasses TTY prompt, populates ideology.md directly
 
 ---
 
