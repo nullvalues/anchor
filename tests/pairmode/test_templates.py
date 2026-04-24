@@ -1381,3 +1381,51 @@ class TestReviewerAgentIdeologyAlignment:
 
     def test_build_gate_still_present_regression(self):
         assert "BUILD GATE" in self.output
+
+
+# ---------------------------------------------------------------------------
+# Story 10.3 — intent-reviewer.md.j2: ideology drift check
+# ---------------------------------------------------------------------------
+
+class TestIntentReviewerIdeologyDrift:
+    """Story 10.3: intent-reviewer.md.j2 must include ideology drift checks."""
+
+    def setup_method(self):
+        self.output = render("agents/intent-reviewer.md.j2", AGENT_CONTEXT)
+
+    def test_ideology_drift_in_output_format(self):
+        assert "IDEOLOGY DRIFT" in self.output
+
+    def test_step_6_docs_ideology_md_in_before_reviewing(self):
+        # Step 6 must reference docs/ideology.md in the ## Before reviewing section
+        before_idx = self.output.index("## Before reviewing")
+        # Find the next ## section after "Before reviewing"
+        next_section_idx = self.output.find("\n## ", before_idx + 1)
+        before_section = self.output[before_idx:next_section_idx] if next_section_idx != -1 else self.output[before_idx:]
+        assert "docs/ideology.md" in before_section
+        assert "6." in before_section
+
+    def test_ideology_drift_in_design_pivot_detection(self):
+        # "Ideology drift" entry must appear in Design pivot detection section
+        pivot_idx = self.output.index("## Design pivot detection")
+        next_section_idx = self.output.find("\n## ", pivot_idx + 1)
+        pivot_section = self.output[pivot_idx:next_section_idx] if next_section_idx != -1 else self.output[pivot_idx:]
+        assert "Ideology drift" in pivot_section
+
+    def test_docs_ideology_md_in_recommended_doc_edits(self):
+        # docs/ideology.md: block must appear in RECOMMENDED DOC EDITS
+        rec_idx = self.output.index("RECOMMENDED DOC EDITS")
+        edits_section = self.output[rec_idx:]
+        assert "docs/ideology.md" in edits_section
+
+    def test_story_alignment_still_present_regression(self):
+        assert "STORY ALIGNMENT" in self.output
+
+    def test_pivots_and_concerns_still_present_regression(self):
+        assert "PIVOTS AND CONCERNS" in self.output
+
+    def test_downstream_risks_still_present_regression(self):
+        assert "DOWNSTREAM RISKS" in self.output
+
+    def test_recommended_doc_edits_still_present_regression(self):
+        assert "RECOMMENDED DOC EDITS" in self.output
