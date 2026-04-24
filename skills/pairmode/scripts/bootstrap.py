@@ -414,6 +414,9 @@ def bootstrap(
         "stack": stack,
         "what": what or "",
         "why": why or "",
+        "core_beliefs": "",
+        "accepted_tradeoffs": "",
+        "must_preserve": "",
         "operator_contact": product.get("operator_contact", ""),
         "build_command": build_command,
         "test_command": test_command,
@@ -435,7 +438,8 @@ def bootstrap(
         "value_hierarchy": [],
         "constraints": [],
         "fingerprints": [],
-        "must_preserve": [],
+        # must_preserve is defined above (shared with brief.md.j2) — empty string is falsy
+        # so ideology.md.j2's {% if must_preserve %} guard works correctly
         "should_question": [],
         "free_to_change": [],
         "comparison_dimensions": [],

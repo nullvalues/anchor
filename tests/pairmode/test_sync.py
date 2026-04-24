@@ -60,12 +60,18 @@ def _copy_canonical_files(project_dir: Path) -> None:
             "A test project for unit tests.\n\n"
             "## Why it exists\n\n"
             "To provide a baseline for sync tests.\n\n"
+            "## Core beliefs\n\n"
+            "We prefer simplicity over complexity in all design decisions.\n\n"
+            "## Accepted tradeoffs\n\n"
+            "We accepted slower startup in exchange for easier configuration.\n\n"
             "## Constraints\n\n"
             "_Explicit constraints the operator has placed on scope or approach:_\n\n"
             "- _(add operator constraints here)_\n\n"
             "## Not in scope\n\n"
             "_Things that might seem related but are intentional omissions:_\n\n"
             "- _(add out-of-scope items here)_\n\n"
+            "## What a second implementation must preserve\n\n"
+            "The core data model and persistence contract must be preserved.\n\n"
             "## Operator contact\n\n"
             "_(not specified)_\n",
             encoding="utf-8",

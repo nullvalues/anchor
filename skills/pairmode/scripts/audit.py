@@ -190,16 +190,25 @@ def _is_stale_placeholder(body: str) -> bool:
     Strips leading/trailing whitespace, then checks whether the result matches
     any sentinel pattern in _PLACEHOLDER_PATTERNS, or consists only of table rows
     that themselves contain only placeholder cell values.
+
+    Also matches extended "not yet specified" placeholders of the form
+    ``_(not yet specified — ...)_`` used by brief.md and ideology.md templates.
     """
     stripped = body.strip()
     if stripped in _PLACEHOLDER_PATTERNS:
+        return True
+    # Extended placeholder: starts with _(not yet specified (covers —- variants)
+    if stripped.startswith("_(not yet specified"):
         return True
     # Handle multi-line bodies: split into non-empty lines and check each
     lines = [ln.strip() for ln in stripped.splitlines() if ln.strip()]
     if not lines:
         return True
-    # If every non-empty line is a placeholder pattern, treat as stale
-    if all(ln in _PLACEHOLDER_PATTERNS for ln in lines):
+    # If every non-empty line is a placeholder pattern or extended placeholder, treat as stale
+    if all(
+        ln in _PLACEHOLDER_PATTERNS or ln.startswith("_(not yet specified")
+        for ln in lines
+    ):
         return True
     return False
 
@@ -412,6 +421,9 @@ def _enrich_scaffold_context(context: dict) -> dict:
     enriched = dict(context)
     enriched.setdefault("what", "")
     enriched.setdefault("why", "")
+    enriched.setdefault("core_beliefs", "")
+    enriched.setdefault("accepted_tradeoffs", "")
+    enriched.setdefault("must_preserve", "")
     enriched.setdefault("operator_contact", "")
     enriched.setdefault("cer_entries", [])
     enriched.setdefault(

@@ -78,12 +78,18 @@ def _write_clean_scaffold_files(project_dir: Path) -> None:
             "A test project for unit tests.\n\n"
             "## Why it exists\n\n"
             "To provide a baseline for audit tests.\n\n"
+            "## Core beliefs\n\n"
+            "We prefer simplicity over complexity in all design decisions.\n\n"
+            "## Accepted tradeoffs\n\n"
+            "We accepted slower startup in exchange for easier configuration.\n\n"
             "## Constraints\n\n"
             "_Explicit constraints the operator has placed on scope or approach:_\n\n"
             "- _(add operator constraints here)_\n\n"
             "## Not in scope\n\n"
             "_Things that might seem related but are intentional omissions:_\n\n"
             "- _(add out-of-scope items here)_\n\n"
+            "## What a second implementation must preserve\n\n"
+            "The core data model and persistence contract must be preserved.\n\n"
             "## Operator contact\n\n"
             "_(not specified)_\n",
             encoding="utf-8",
@@ -1105,6 +1111,12 @@ class TestAuditStalePlaceholderLabelling:
             "## Why it exists\n\n"
             f"{why}\n\n"
             "---\n\n"
+            "## Core beliefs\n\n"
+            "We prefer simplicity over complexity in all design decisions.\n\n"
+            "---\n\n"
+            "## Accepted tradeoffs\n\n"
+            "We accepted slower startup in exchange for easier configuration.\n\n"
+            "---\n\n"
             "## Constraints\n\n"
             "_Explicit constraints the operator has placed on scope or approach:_\n\n"
             "- _(add operator constraints here)_\n\n"
@@ -1112,6 +1124,9 @@ class TestAuditStalePlaceholderLabelling:
             "## Not in scope\n\n"
             "_Things that might seem related but are intentional omissions:_\n\n"
             "- _(add out-of-scope items here)_\n\n"
+            "---\n\n"
+            "## What a second implementation must preserve\n\n"
+            "The core data model and persistence contract must be preserved.\n\n"
             "---\n\n"
             "## Operator contact\n\n"
             "_(not specified)_\n"
@@ -1272,4 +1287,158 @@ class TestAuditPhase7SectionLevelComparison:
         )
         assert "docs/cer/backlog.md" not in existence_dests, (
             "docs/cer/backlog.md must NOT be in EXISTENCE_CHECK_FILES"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Story 10.1 — Core beliefs / What a second implementation must preserve
+# ---------------------------------------------------------------------------
+
+
+def _write_brief_with_core_beliefs(
+    project_dir: Path, core_beliefs_body: str, include_must_preserve: bool = True
+) -> None:
+    """Write a docs/brief.md that includes the new Story 10.1 sections."""
+    must_preserve_section = (
+        "## What a second implementation must preserve\n\n"
+        "The core data model and persistence contract must be preserved.\n\n"
+        if include_must_preserve
+        else ""
+    )
+    brief_content = (
+        "# Brief — testproject\n\n"
+        "> One-page project brief.\n\n"
+        "---\n\n"
+        "## What this project produces\n\n"
+        "A test project for unit tests.\n\n"
+        "---\n\n"
+        "## Why it exists\n\n"
+        "To provide a baseline for audit tests.\n\n"
+        "---\n\n"
+        f"## Core beliefs\n\n"
+        f"{core_beliefs_body}\n\n"
+        "---\n\n"
+        "## Accepted tradeoffs\n\n"
+        "We accepted slower startup in exchange for easier configuration.\n\n"
+        "---\n\n"
+        "## Constraints\n\n"
+        "_Explicit constraints the operator has placed on scope or approach:_\n\n"
+        "- _(add operator constraints here)_\n\n"
+        "---\n\n"
+        "## Not in scope\n\n"
+        "_Things that might seem related but are intentional omissions:_\n\n"
+        "- _(add out-of-scope items here)_\n\n"
+        "---\n\n"
+        f"{must_preserve_section}"
+        "## Operator contact\n\n"
+        "_(not specified)_\n"
+    )
+    brief_path = project_dir / "docs" / "brief.md"
+    brief_path.parent.mkdir(parents=True, exist_ok=True)
+    brief_path.write_text(brief_content, encoding="utf-8")
+
+
+class TestAuditCoreBeliefsSection:
+    """Story 10.1 — audit checks for ## Core beliefs in docs/brief.md."""
+
+    def test_missing_core_beliefs_heading_produces_missing_finding(self, tmp_path: Path) -> None:
+        """docs/brief.md without ## Core beliefs → MISSING section finding."""
+        _write_state(tmp_path)
+        _write_context(tmp_path)
+        _copy_canonical_files(tmp_path)
+
+        # Write a brief.md that lacks the Core beliefs section
+        brief_path = tmp_path / "docs" / "brief.md"
+        brief_path.write_text(
+            "# Brief — testproject\n\n"
+            "## What this project produces\n\n"
+            "A test project.\n\n"
+            "## Why it exists\n\n"
+            "For testing.\n\n"
+            "## Accepted tradeoffs\n\n"
+            "We gave up Y.\n\n"
+            "## Constraints\n\n"
+            "- _(add operator constraints here)_\n\n"
+            "## Not in scope\n\n"
+            "- _(add out-of-scope items here)_\n\n"
+            "## What a second implementation must preserve\n\n"
+            "The data model.\n\n"
+            "## Operator contact\n\n"
+            "_(not specified)_\n",
+            encoding="utf-8",
+        )
+
+        result = audit_project(tmp_path)
+
+        missing_sections = {i.section for i in result.missing if i.file == "docs/brief.md"}
+        from skills.pairmode.scripts.audit import _normalise
+        assert _normalise("## Core beliefs") in missing_sections, (
+            f"Expected '## core beliefs' in missing sections, got: {missing_sections}"
+        )
+
+    def test_core_beliefs_with_placeholder_produces_stale_placeholder(self, tmp_path: Path) -> None:
+        """docs/brief.md with ## Core beliefs containing only placeholder text → STALE PLACEHOLDER."""
+        _write_state(tmp_path)
+        _write_context(tmp_path)
+        _copy_canonical_files(tmp_path)
+
+        _write_brief_with_core_beliefs(
+            tmp_path,
+            core_beliefs_body="_(not yet specified — what does this project believe about how software should be built? What does it value over what?)_",
+        )
+
+        result = audit_project(tmp_path)
+
+        stale_items = [
+            i for i in result.inconsistent
+            if i.file == "docs/brief.md" and "STALE PLACEHOLDER" in i.description
+            and "core beliefs" in i.section.lower()
+        ]
+        assert len(stale_items) > 0, (
+            f"Expected STALE PLACEHOLDER for ## Core beliefs with placeholder text. "
+            f"Got inconsistent: {result.inconsistent}"
+        )
+
+    def test_core_beliefs_with_real_content_is_clean(self, tmp_path: Path) -> None:
+        """docs/brief.md with ## Core beliefs containing real content → no STALE PLACEHOLDER."""
+        _write_state(tmp_path)
+        _write_context(tmp_path)
+        _copy_canonical_files(tmp_path)
+
+        _write_brief_with_core_beliefs(
+            tmp_path,
+            core_beliefs_body="We prefer simplicity over complexity in all design decisions.",
+        )
+
+        result = audit_project(tmp_path)
+
+        stale_items = [
+            i for i in result.inconsistent
+            if i.file == "docs/brief.md" and "STALE PLACEHOLDER" in i.description
+            and "core beliefs" in i.section.lower()
+        ]
+        assert stale_items == [], (
+            f"Expected no STALE PLACEHOLDER for ## Core beliefs with real content. "
+            f"Got: {stale_items}"
+        )
+
+    def test_missing_must_preserve_heading_produces_missing_finding(self, tmp_path: Path) -> None:
+        """docs/brief.md without ## What a second implementation must preserve → MISSING."""
+        _write_state(tmp_path)
+        _write_context(tmp_path)
+        _copy_canonical_files(tmp_path)
+
+        _write_brief_with_core_beliefs(
+            tmp_path,
+            core_beliefs_body="We prefer simplicity over complexity.",
+            include_must_preserve=False,
+        )
+
+        result = audit_project(tmp_path)
+
+        missing_sections = {i.section for i in result.missing if i.file == "docs/brief.md"}
+        from skills.pairmode.scripts.audit import _normalise
+        assert _normalise("## What a second implementation must preserve") in missing_sections, (
+            f"Expected 'what a second implementation must preserve' in missing sections, "
+            f"got: {missing_sections}"
         )

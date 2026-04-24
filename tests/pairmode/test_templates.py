@@ -147,6 +147,9 @@ BRIEF_MD_CONTEXT = {
     "stack": "Python 3.11+ / FastAPI / PostgreSQL",
     "what": "A REST API that manages user accounts and permissions for enterprise clients.",
     "why": "Existing solutions lack fine-grained role management required by our enterprise customers.",
+    "core_beliefs": "We prefer X.",
+    "accepted_tradeoffs": "We gave up Y for Z.",
+    "must_preserve": "The data contract.",
     "operator_contact": "alice@example.com",
 }
 
@@ -156,6 +159,9 @@ BRIEF_MD_EMPTY_CONTEXT = {
     "stack": "Python",
     "what": "",
     "why": "",
+    "core_beliefs": "",
+    "accepted_tradeoffs": "",
+    "must_preserve": "",
     "operator_contact": "",
 }
 
@@ -207,6 +213,61 @@ class TestBriefMdTemplateEmptyFields:
     def test_empty_why_shows_placeholder(self):
         output = render("docs/brief.md.j2", BRIEF_MD_EMPTY_CONTEXT)
         assert "not yet specified" in output
+
+
+# ---------------------------------------------------------------------------
+# Story 10.1 — brief.md.j2 positive ideology sections
+# ---------------------------------------------------------------------------
+
+BRIEF_MD_IDEOLOGY_EMPTY_CONTEXT = {
+    "project_name": "myapp",
+    "project_description": "",
+    "stack": "Python",
+    "what": "",
+    "why": "",
+    "core_beliefs": "",
+    "accepted_tradeoffs": "",
+    "must_preserve": "",
+    "operator_contact": "",
+}
+
+
+class TestBriefMdIdeologySections:
+    """Story 10.1: three new ideology sections in docs/brief.md.j2."""
+
+    def test_core_beliefs_heading_present_in_empty_render(self):
+        output = render("docs/brief.md.j2", BRIEF_MD_IDEOLOGY_EMPTY_CONTEXT)
+        assert "## Core beliefs" in output
+
+    def test_accepted_tradeoffs_heading_present_in_empty_render(self):
+        output = render("docs/brief.md.j2", BRIEF_MD_IDEOLOGY_EMPTY_CONTEXT)
+        assert "## Accepted tradeoffs" in output
+
+    def test_must_preserve_heading_present_in_empty_render(self):
+        output = render("docs/brief.md.j2", BRIEF_MD_IDEOLOGY_EMPTY_CONTEXT)
+        assert "## What a second implementation must preserve" in output
+
+    def test_core_beliefs_real_value_renders(self):
+        ctx = {**BRIEF_MD_IDEOLOGY_EMPTY_CONTEXT, "core_beliefs": "We prefer X."}
+        output = render("docs/brief.md.j2", ctx)
+        assert "We prefer X." in output
+
+    def test_core_beliefs_real_value_no_placeholder(self):
+        ctx = {**BRIEF_MD_IDEOLOGY_EMPTY_CONTEXT, "core_beliefs": "We prefer X."}
+        output = render("docs/brief.md.j2", ctx)
+        # Placeholder for core_beliefs should not appear when real value provided
+        assert "_(not yet specified — what does this project believe" not in output
+
+    def test_empty_core_beliefs_shows_placeholder(self):
+        output = render("docs/brief.md.j2", BRIEF_MD_IDEOLOGY_EMPTY_CONTEXT)
+        assert "_(not yet specified" in output
+
+    def test_existing_headings_still_present(self):
+        output = render("docs/brief.md.j2", BRIEF_MD_IDEOLOGY_EMPTY_CONTEXT)
+        assert "## What this project produces" in output
+        assert "## Why it exists" in output
+        assert "## Constraints" in output
+        assert "## Not in scope" in output
 
 
 # ---------------------------------------------------------------------------
