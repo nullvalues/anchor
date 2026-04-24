@@ -90,6 +90,11 @@ UNIVERSAL_CHECKLIST_ITEMS: list[dict] = [
         "description": "Does the build command pass without errors?",
         "severity": "CRITICAL",
     },
+    {
+        "name": "IDEOLOGY ALIGNMENT",
+        "description": "Does this implementation express the project ideology? Check docs/ideology.md.",
+        "severity": "HIGH",
+    },
 ]
 
 

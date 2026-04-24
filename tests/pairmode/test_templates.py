@@ -1347,3 +1347,37 @@ class TestIdeologyMdTemplate:
         output = render("docs/ideology.md.j2", context)
         # The placeholder should not appear when actual convictions are provided
         assert "_(not yet specified — fill in before first story" not in output
+
+
+# ---------------------------------------------------------------------------
+# Story 10.2 — reviewer.md.j2: IDEOLOGY ALIGNMENT checklist item
+# ---------------------------------------------------------------------------
+
+class TestReviewerAgentIdeologyAlignment:
+    """Story 10.2: reviewer.md.j2 must contain IDEOLOGY ALIGNMENT as checklist item 5."""
+
+    def setup_method(self):
+        self.output = render("agents/reviewer.md.j2", AGENT_CONTEXT)
+
+    def test_ideology_alignment_present(self):
+        assert "IDEOLOGY ALIGNMENT" in self.output
+
+    def test_sub_checks_5a_5b_5c_present(self):
+        assert "5a." in self.output
+        assert "5b." in self.output
+        assert "5c." in self.output
+
+    def test_docs_ideology_md_referenced(self):
+        assert "docs/ideology.md" in self.output
+
+    def test_documentation_currency_still_present_regression(self):
+        assert "DOCUMENTATION CURRENCY" in self.output
+
+    def test_protected_files_still_present_regression(self):
+        assert "PROTECTED FILES" in self.output
+
+    def test_story_scope_still_present_regression(self):
+        assert "STORY SCOPE" in self.output
+
+    def test_build_gate_still_present_regression(self):
+        assert "BUILD GATE" in self.output

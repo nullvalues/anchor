@@ -1114,3 +1114,26 @@ class TestIdeologyMdBootstrap:
 
     def test_write_ideology_md_in_default_deny(self):
         assert "Write(docs/ideology.md)" in DEFAULT_DENY
+
+
+# ---------------------------------------------------------------------------
+# Story 10.2 — UNIVERSAL_CHECKLIST_ITEMS contains IDEOLOGY ALIGNMENT
+# ---------------------------------------------------------------------------
+
+class TestUniversalChecklistItemsIdeologyAlignment:
+    """Story 10.2: UNIVERSAL_CHECKLIST_ITEMS must include IDEOLOGY ALIGNMENT."""
+
+    def test_ideology_alignment_entry_present(self):
+        from skills.pairmode.scripts.bootstrap import UNIVERSAL_CHECKLIST_ITEMS
+        names = [item["name"] for item in UNIVERSAL_CHECKLIST_ITEMS]
+        assert "IDEOLOGY ALIGNMENT" in names
+
+    def test_ideology_alignment_severity_is_high(self):
+        from skills.pairmode.scripts.bootstrap import UNIVERSAL_CHECKLIST_ITEMS
+        entry = next(item for item in UNIVERSAL_CHECKLIST_ITEMS if item["name"] == "IDEOLOGY ALIGNMENT")
+        assert entry["severity"] == "HIGH"
+
+    def test_ideology_alignment_description_references_ideology_md(self):
+        from skills.pairmode.scripts.bootstrap import UNIVERSAL_CHECKLIST_ITEMS
+        entry = next(item for item in UNIVERSAL_CHECKLIST_ITEMS if item["name"] == "IDEOLOGY ALIGNMENT")
+        assert "ideology" in entry["description"].lower()
