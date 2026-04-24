@@ -145,6 +145,13 @@ RECOMMENDATION
   finding with recommendation to run guided ideology capture
 - At least one section has real content → clean (no finding)
 
+**Reconstruction staleness detection:**
+- Detects missing or stale `docs/reconstruction.md` (run `/anchor:pairmode reconstruct` to fix).
+- `docs/reconstruction.md` absent → `MISSING` finding
+- File contains the generated-brief footer (`Generated from \`docs/ideology.md\``) and all
+  required scoring sections are placeholder-only → `STALE PLACEHOLDER` finding
+- Completed scoring report (no generated footer) → clean (no finding)
+
 **Outputs:**
 - A human-readable audit report printed to the session, summarizing all deltas and recommended
   actions. No files are written.
