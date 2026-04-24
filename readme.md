@@ -110,9 +110,12 @@ A complete builder/reviewer workflow that any project can adopt. Pairmode turns 
 
 # Review accumulated lessons and update templates
 /anchor:pairmode review
+
+# Refresh docs/reconstruction.md from ideology.md + brief.md (handoff for blank-slate agent)
+/anchor:pairmode reconstruct
 ```
 
-The scaffold produces: `CLAUDE.md`, `CLAUDE.build.md`, `docs/` (brief, architecture, ideology, phases, CER backlog), `.claude/agents/` (builder, reviewer, loop-breaker, security-auditor, intent-reviewer), and `.claude/settings.json` with a spec-derived deny list.
+The scaffold produces: `CLAUDE.md`, `CLAUDE.build.md`, `docs/` (brief, architecture, ideology, reconstruction, phases, CER backlog), `.claude/agents/` (builder, reviewer, loop-breaker, security-auditor, intent-reviewer), and `.claude/settings.json` with a spec-derived deny list.
 
 Phases are tracked individually in `docs/phases/phase-N.md`. A CER triage backlog (`docs/cer/backlog.md`) captures findings that cannot be resolved immediately.
 
