@@ -1053,3 +1053,64 @@ class TestDefaultDenyScopeDocs:
     def test_edit_cer_backlog_not_in_default_deny(self):
         """docs/cer/backlog.md is an operational file — must not be denied."""
         assert "Edit(docs/cer/backlog.md)" not in DEFAULT_DENY
+
+
+# ---------------------------------------------------------------------------
+# Story 10.0: ideology.md bootstrap tests
+# ---------------------------------------------------------------------------
+
+class TestIdeologyMdBootstrap:
+    """Bootstrap renders docs/ideology.md from the template."""
+
+    def test_bootstrap_writes_ideology_md(self, tmp_path):
+        result = run_bootstrap(tmp_path)
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "docs/ideology.md").exists(), (
+            "Bootstrap must write docs/ideology.md"
+        )
+
+    def test_ideology_md_has_core_convictions_heading(self, tmp_path):
+        run_bootstrap(tmp_path)
+        content = (tmp_path / "docs/ideology.md").read_text(encoding="utf-8")
+        assert "## Core convictions" in content
+
+    def test_ideology_md_has_reconstruction_guidance_heading(self, tmp_path):
+        run_bootstrap(tmp_path)
+        content = (tmp_path / "docs/ideology.md").read_text(encoding="utf-8")
+        assert "## Reconstruction guidance" in content
+
+    def test_ideology_md_has_must_preserve_subheading(self, tmp_path):
+        run_bootstrap(tmp_path)
+        content = (tmp_path / "docs/ideology.md").read_text(encoding="utf-8")
+        assert "### Must preserve" in content
+
+    def test_ideology_md_existing_file_prompts_confirmation(self, tmp_path):
+        """Bootstrap on existing project with docs/ideology.md present prompts for
+        confirmation before overwriting — it does not overwrite silently."""
+        run_bootstrap(tmp_path)
+
+        # Write sentinel content into ideology.md
+        (tmp_path / "docs/ideology.md").write_text("sentinel content", encoding="utf-8")
+
+        # Second run — simulate user declining all overwrite prompts
+        runner = CliRunner()
+        result = runner.invoke(
+            bootstrap,
+            [
+                "--project-dir", str(tmp_path),
+                "--project-name", "testproject",
+                "--stack", "Python / pytest",
+                "--build-command", "uv run pytest",
+            ],
+            input="n\n" * 20,
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0, result.output
+        # File should still have the sentinel content (not overwritten silently)
+        assert (tmp_path / "docs/ideology.md").read_text(encoding="utf-8") == "sentinel content"
+
+    def test_edit_ideology_md_in_default_deny(self):
+        assert "Edit(docs/ideology.md)" in DEFAULT_DENY
+
+    def test_write_ideology_md_in_default_deny(self):
+        assert "Write(docs/ideology.md)" in DEFAULT_DENY

@@ -39,6 +39,7 @@ SCAFFOLD_FILES: list[tuple[str, str]] = [
     ("CLAUDE.md", "CLAUDE.md.j2"),
     ("CLAUDE.build.md", "CLAUDE.build.md.j2"),
     ("docs/brief.md", "docs/brief.md.j2"),
+    ("docs/ideology.md", "docs/ideology.md.j2"),
     ("docs/architecture.md", "docs/architecture.md.j2"),
     ("docs/checkpoints.md", "docs/checkpoints.md.j2"),
     ("docs/cer/backlog.md", "docs/cer/backlog.md.j2"),
@@ -68,6 +69,8 @@ DEFAULT_DENY: list[str] = [
     "Write(docs/phases/**)",
     "Edit(docs/brief.md)",
     "Write(docs/brief.md)",
+    "Edit(docs/ideology.md)",
+    "Write(docs/ideology.md)",
 ]
 
 # Universal checklist items always included in templates
@@ -427,6 +430,15 @@ def bootstrap(
         # CER backlog template variables
         "cer_entries": [],
         "last_updated": datetime.date.today().isoformat(),
+        # ideology.md.j2 variables — all default to empty lists (renders placeholders)
+        "convictions": [],
+        "value_hierarchy": [],
+        "constraints": [],
+        "fingerprints": [],
+        "must_preserve": [],
+        "should_question": [],
+        "free_to_change": [],
+        "comparison_dimensions": [],
     }
 
     # ------------------------------------------------------------------

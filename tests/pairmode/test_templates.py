@@ -1227,3 +1227,62 @@ class TestIntentReviewerPhasePromptsReferences:
     def test_phase_n_md_is_primary_reference(self):
         """docs/phases/phase-N.md appears as the primary phase file reference."""
         assert "docs/phases/phase-N.md" in self.output
+
+
+# ---------------------------------------------------------------------------
+# Story 10.0 — ideology.md.j2 template tests
+# ---------------------------------------------------------------------------
+
+IDEOLOGY_EMPTY_CONTEXT = {
+    "project_name": "myapp",
+    "convictions": [],
+    "value_hierarchy": [],
+    "constraints": [],
+    "fingerprints": [],
+    "must_preserve": [],
+    "should_question": [],
+    "free_to_change": [],
+    "comparison_dimensions": [],
+}
+
+
+class TestIdeologyMdTemplate:
+    """Tests for docs/ideology.md.j2."""
+
+    def test_renders_without_error_empty_context(self):
+        output = render("docs/ideology.md.j2", IDEOLOGY_EMPTY_CONTEXT)
+        assert output
+
+    def test_all_six_section_headings_present(self):
+        output = render("docs/ideology.md.j2", IDEOLOGY_EMPTY_CONTEXT)
+        assert "## Core convictions" in output
+        assert "## Value hierarchy" in output
+        assert "## Accepted constraints" in output
+        assert "## Prototype fingerprints" in output
+        assert "## Reconstruction guidance" in output
+        assert "## Comparison basis" in output
+
+    def test_placeholder_strings_present_in_empty_context(self):
+        output = render("docs/ideology.md.j2", IDEOLOGY_EMPTY_CONTEXT)
+        # Each empty section should contain the "_(not yet specified" placeholder
+        assert "_(not yet specified" in output
+
+    def test_project_name_in_title(self):
+        output = render("docs/ideology.md.j2", IDEOLOGY_EMPTY_CONTEXT)
+        assert "myapp" in output
+
+    def test_project_name_substituted_with_testproject(self):
+        context = {**IDEOLOGY_EMPTY_CONTEXT, "project_name": "TestProject"}
+        output = render("docs/ideology.md.j2", context)
+        assert "TestProject" in output
+
+    def test_conviction_value_renders_when_provided(self):
+        context = {**IDEOLOGY_EMPTY_CONTEXT, "convictions": ["We prefer X over Y"]}
+        output = render("docs/ideology.md.j2", context)
+        assert "We prefer X over Y" in output
+
+    def test_conviction_placeholder_absent_when_convictions_provided(self):
+        context = {**IDEOLOGY_EMPTY_CONTEXT, "convictions": ["We prefer X over Y"]}
+        output = render("docs/ideology.md.j2", context)
+        # The placeholder should not appear when actual convictions are provided
+        assert "_(not yet specified — fill in before first story" not in output
