@@ -102,6 +102,61 @@ _JINJA_ENV = jinja2.Environment(
 )
 
 
+IDEOLOGY_PLACEHOLDER_MARKER = "_(not yet specified"
+IDEOLOGY_REQUIRED_SECTIONS = [
+    "## Core convictions",
+    "## Value hierarchy",
+    "## Accepted constraints",
+    "## Prototype fingerprints",
+    "## Reconstruction guidance",
+    "## Comparison basis",
+]
+
+
+def _strip_html_comments(text: str) -> str:
+    """Remove HTML comments (<!-- ... -->) from text."""
+    return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+
+
+def _check_ideology_staleness(project_dir: Path) -> str | None:
+    """None if absent, 'STALE' if all placeholder, 'OK' if real content found."""
+    ideology_path = project_dir / "docs" / "ideology.md"
+    if not ideology_path.exists():
+        return None
+
+    text = ideology_path.read_text(encoding="utf-8")
+    text = _strip_html_comments(text)
+
+    # Split text into sections by ## headings
+    # For each required section, find its body and check for real content
+    found_real_content = False
+
+    for section_header in IDEOLOGY_REQUIRED_SECTIONS:
+        # Find the section in the text (case-insensitive match on normalised form)
+        pattern = re.compile(
+            r"^" + re.escape(section_header) + r"\s*$(.+?)(?=^##|\Z)",
+            re.MULTILINE | re.DOTALL | re.IGNORECASE,
+        )
+        match = pattern.search(text)
+        if not match:
+            # Section missing entirely — count as placeholder, continue
+            continue
+
+        body = match.group(1)
+        # Check each non-empty line that is not a placeholder
+        lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
+        for line in lines:
+            if not line.startswith(IDEOLOGY_PLACEHOLDER_MARKER):
+                found_real_content = True
+                break
+        if found_real_content:
+            break
+
+    if found_real_content:
+        return "OK"
+    return "STALE"
+
+
 def _load_project_context(project_dir: Path) -> tuple[dict, bool]:
     """Load the saved bootstrap context, or return a minimal empty context.
 
@@ -411,6 +466,28 @@ def audit_project(project_dir: Path, applies_to: str = "all") -> AuditResult:
                     )
                 # else: consistent — nothing to add
 
+    # Ideology staleness check — handled separately from SCAFFOLD_FILES
+    ideology_status = _check_ideology_staleness(project_dir)
+    if ideology_status is None:
+        result.missing.append(
+            AuditItem(
+                file="docs/ideology.md",
+                section="__file__",
+                description="File missing entirely — run bootstrap to generate docs/ideology.md",
+            )
+        )
+    elif ideology_status == "STALE":
+        result.inconsistent.append(
+            AuditItem(
+                file="docs/ideology.md",
+                section="__content__",
+                description=(
+                    "STALE PLACEHOLDER — all sections contain placeholder text"
+                ),
+            )
+        )
+    # "OK" → no finding
+
     return result
 
 
@@ -464,9 +541,30 @@ def format_audit_output(result: AuditResult) -> str:
             lines.append(f"  \u2717 {item.file}: {item.description}{lesson_tag}")
         lines.append("")
 
-    if result.inconsistent:
+    # Separate ideology stale-placeholder from other inconsistent items
+    ideology_stale = [
+        i for i in result.inconsistent
+        if i.file == "docs/ideology.md" and "STALE PLACEHOLDER" in i.description
+    ]
+    other_inconsistent = [
+        i for i in result.inconsistent
+        if not (i.file == "docs/ideology.md" and "STALE PLACEHOLDER" in i.description)
+    ]
+
+    if ideology_stale:
+        lines.append("STALE PLACEHOLDER")
+        lines.append(
+            "  \u26a0 docs/ideology.md: all sections contain placeholder text"
+        )
+        lines.append(
+            "    Recommendation: run bootstrap in TTY to trigger guided ideology capture,"
+        )
+        lines.append("    or edit docs/ideology.md directly.")
+        lines.append("")
+
+    if other_inconsistent:
         lines.append("INCONSISTENT")
-        for item in result.inconsistent:
+        for item in other_inconsistent:
             lines.append(f"  ~ {item.file}: {item.description}")
         lines.append("")
 

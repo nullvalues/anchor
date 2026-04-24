@@ -17,6 +17,7 @@ from skills.pairmode.scripts.audit import (
     _is_separator_key,
     _is_stale_placeholder,
     _enrich_scaffold_context,
+    _check_ideology_staleness,
     SCAFFOLD_FILES,
 )
 from skills.pairmode.scripts import audit as _audit_mod
@@ -62,6 +63,45 @@ def _copy_canonical_files(project_dir: Path) -> None:
     # Scaffold files (brief.md, index.md, backlog.md) are project-specific docs;
     # we write them with real-looking content so tests get a clean baseline.
     _write_clean_scaffold_files(project_dir)
+
+
+def _write_ideology_md(project_dir: Path, stale: bool = False) -> None:
+    """Write docs/ideology.md — real content when stale=False, placeholders when stale=True."""
+    (project_dir / "docs").mkdir(parents=True, exist_ok=True)
+    ideology_path = project_dir / "docs" / "ideology.md"
+    if stale:
+        content = (
+            "# Ideology — testproject\n\n"
+            "## Core convictions\n\n"
+            "_(not yet specified — what do you believe?)_\n\n"
+            "## Value hierarchy\n\n"
+            "_(not yet specified — what do you value most?)_\n\n"
+            "## Accepted constraints\n\n"
+            "_(not yet specified — what constraints do you accept?)_\n\n"
+            "## Prototype fingerprints\n\n"
+            "_(not yet specified — what are your fingerprints?)_\n\n"
+            "## Reconstruction guidance\n\n"
+            "_(not yet specified — how would you reconstruct?)_\n\n"
+            "## Comparison basis\n\n"
+            "_(not yet specified — what is the comparison basis?)_\n"
+        )
+    else:
+        content = (
+            "# Ideology — testproject\n\n"
+            "## Core convictions\n\n"
+            "We believe in simplicity over complexity at every level of the stack.\n\n"
+            "## Value hierarchy\n\n"
+            "Correctness > Performance > Convenience.\n\n"
+            "## Accepted constraints\n\n"
+            "We operate within a strict budget; no expensive third-party APIs.\n\n"
+            "## Prototype fingerprints\n\n"
+            "The canonical implementation uses Python with uv and Rich.\n\n"
+            "## Reconstruction guidance\n\n"
+            "Start from the spec, not the code. The spec is the source of truth.\n\n"
+            "## Comparison basis\n\n"
+            "Compare against the reference implementation in the anchor repo.\n"
+        )
+    ideology_path.write_text(content, encoding="utf-8")
 
 
 def _write_clean_scaffold_files(project_dir: Path) -> None:
@@ -135,6 +175,11 @@ def _write_clean_scaffold_files(project_dir: Path) -> None:
             "| — | *(none)* | — | — | — | — |\n",
             encoding="utf-8",
         )
+
+    # Write ideology.md with real content so it doesn't trigger MISSING/STALE
+    ideology_path = project_dir / "docs" / "ideology.md"
+    if not ideology_path.exists():
+        _write_ideology_md(project_dir, stale=False)
 
 
 # ---------------------------------------------------------------------------
@@ -1441,4 +1486,217 @@ class TestAuditCoreBeliefsSection:
         assert _normalise("## What a second implementation must preserve") in missing_sections, (
             f"Expected 'what a second implementation must preserve' in missing sections, "
             f"got: {missing_sections}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Story 10.5 — Ideology staleness detection
+# ---------------------------------------------------------------------------
+
+
+class TestCheckIdeologyStaleness:
+    """Unit tests for _check_ideology_staleness."""
+
+    def test_absent_returns_none(self, tmp_path: Path) -> None:
+        """docs/ideology.md absent → returns None."""
+        result = _check_ideology_staleness(tmp_path)
+        assert result is None
+
+    def test_all_placeholder_returns_stale(self, tmp_path: Path) -> None:
+        """All required sections have placeholder text → returns 'STALE'."""
+        _write_ideology_md(tmp_path, stale=True)
+        result = _check_ideology_staleness(tmp_path)
+        assert result == "STALE"
+
+    def test_one_real_section_returns_ok(self, tmp_path: Path) -> None:
+        """At least one section with real content → returns 'OK'."""
+        (tmp_path / "docs").mkdir(parents=True, exist_ok=True)
+        content = (
+            "# Ideology\n\n"
+            "## Core convictions\n\n"
+            "We believe in simplicity.\n\n"  # real content
+            "## Value hierarchy\n\n"
+            "_(not yet specified — values)_\n\n"
+            "## Accepted constraints\n\n"
+            "_(not yet specified — constraints)_\n\n"
+            "## Prototype fingerprints\n\n"
+            "_(not yet specified — fingerprints)_\n\n"
+            "## Reconstruction guidance\n\n"
+            "_(not yet specified — guidance)_\n\n"
+            "## Comparison basis\n\n"
+            "_(not yet specified — basis)_\n"
+        )
+        (tmp_path / "docs" / "ideology.md").write_text(content, encoding="utf-8")
+        result = _check_ideology_staleness(tmp_path)
+        assert result == "OK"
+
+    def test_fully_populated_returns_ok(self, tmp_path: Path) -> None:
+        """Fully populated ideology.md → returns 'OK'."""
+        _write_ideology_md(tmp_path, stale=False)
+        result = _check_ideology_staleness(tmp_path)
+        assert result == "OK"
+
+    def test_mixed_file_returns_ok(self, tmp_path: Path) -> None:
+        """Some placeholder sections, one real → returns 'OK'."""
+        (tmp_path / "docs").mkdir(parents=True, exist_ok=True)
+        content = (
+            "# Ideology\n\n"
+            "## Core convictions\n\n"
+            "_(not yet specified — convictions)_\n\n"
+            "## Value hierarchy\n\n"
+            "Correctness over performance.\n\n"  # real content
+            "## Accepted constraints\n\n"
+            "_(not yet specified — constraints)_\n\n"
+            "## Prototype fingerprints\n\n"
+            "_(not yet specified — fingerprints)_\n\n"
+            "## Reconstruction guidance\n\n"
+            "_(not yet specified — guidance)_\n\n"
+            "## Comparison basis\n\n"
+            "_(not yet specified — basis)_\n"
+        )
+        (tmp_path / "docs" / "ideology.md").write_text(content, encoding="utf-8")
+        result = _check_ideology_staleness(tmp_path)
+        assert result == "OK"
+
+    def test_html_comment_lines_ignored(self, tmp_path: Path) -> None:
+        """HTML comment lines in section body do not count as real content."""
+        (tmp_path / "docs").mkdir(parents=True, exist_ok=True)
+        content = (
+            "# Ideology\n\n"
+            "## Core convictions\n\n"
+            "<!-- This is an HTML comment -->\n"
+            "_(not yet specified — convictions)_\n\n"
+            "## Value hierarchy\n\n"
+            "_(not yet specified — values)_\n\n"
+            "## Accepted constraints\n\n"
+            "_(not yet specified — constraints)_\n\n"
+            "## Prototype fingerprints\n\n"
+            "_(not yet specified — fingerprints)_\n\n"
+            "## Reconstruction guidance\n\n"
+            "_(not yet specified — guidance)_\n\n"
+            "## Comparison basis\n\n"
+            "_(not yet specified — basis)_\n"
+        )
+        (tmp_path / "docs" / "ideology.md").write_text(content, encoding="utf-8")
+        result = _check_ideology_staleness(tmp_path)
+        assert result == "STALE"
+
+
+class TestAuditIdeologyMd:
+    """Integration tests: audit_project detects ideology.md missing/stale."""
+
+    def test_missing_ideology_md_produces_missing_finding(self, tmp_path: Path) -> None:
+        """docs/ideology.md absent → MISSING finding in result."""
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+        # Remove ideology.md that _copy_canonical_files created
+        ideology_path = tmp_path / "docs" / "ideology.md"
+        if ideology_path.exists():
+            ideology_path.unlink()
+
+        result = audit_project(tmp_path)
+
+        missing_files = {i.file for i in result.missing}
+        assert "docs/ideology.md" in missing_files, (
+            f"Expected docs/ideology.md in missing files, got: {missing_files}"
+        )
+
+    def test_stale_ideology_md_produces_stale_placeholder_finding(self, tmp_path: Path) -> None:
+        """docs/ideology.md with all placeholder sections → STALE PLACEHOLDER inconsistent finding."""
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+        # Overwrite with a fully stale ideology.md
+        _write_ideology_md(tmp_path, stale=True)
+
+        result = audit_project(tmp_path)
+
+        stale_items = [
+            i for i in result.inconsistent
+            if i.file == "docs/ideology.md" and "STALE PLACEHOLDER" in i.description
+        ]
+        assert len(stale_items) > 0, (
+            f"Expected STALE PLACEHOLDER finding for docs/ideology.md, "
+            f"got inconsistent: {result.inconsistent}"
+        )
+
+    def test_real_ideology_md_produces_no_finding(self, tmp_path: Path) -> None:
+        """docs/ideology.md with real content in at least one section → no staleness finding."""
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+        # _write_ideology_md(stale=False) is already done by _copy_canonical_files via
+        # _write_clean_scaffold_files; confirm no finding
+        _write_ideology_md(tmp_path, stale=False)
+
+        result = audit_project(tmp_path)
+
+        ideology_findings = [
+            i for i in result.missing + result.inconsistent
+            if i.file == "docs/ideology.md"
+        ]
+        assert ideology_findings == [], (
+            f"Expected no ideology findings for real ideology.md, got: {ideology_findings}"
+        )
+
+    def test_stale_ideology_format_output_shows_stale_placeholder_header(self, tmp_path: Path) -> None:
+        """format_audit_output shows 'STALE PLACEHOLDER' header for stale ideology.md."""
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+        _write_ideology_md(tmp_path, stale=True)
+
+        result = audit_project(tmp_path)
+        output = format_audit_output(result)
+
+        assert "STALE PLACEHOLDER" in output
+        assert "docs/ideology.md" in output
+        assert "guided ideology capture" in output
+
+    def test_missing_ideology_format_output_shows_missing_header(self, tmp_path: Path) -> None:
+        """format_audit_output shows 'MISSING' header for absent ideology.md."""
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+        ideology_path = tmp_path / "docs" / "ideology.md"
+        if ideology_path.exists():
+            ideology_path.unlink()
+
+        result = audit_project(tmp_path)
+        output = format_audit_output(result)
+
+        assert "MISSING" in output
+        assert "docs/ideology.md" in output
+
+    def test_ideology_not_in_scaffold_or_existence_files(self) -> None:
+        """docs/ideology.md must not be in SCAFFOLD_FILES or EXISTENCE_CHECK_FILES."""
+        from skills.pairmode.scripts import audit as _audit_mod_local
+
+        scaffold_dests = {d for d, _t in _audit_mod_local.SCAFFOLD_FILES}
+        existence_dests = {d for d, _t, _desc in _audit_mod_local.EXISTENCE_CHECK_FILES}
+
+        assert "docs/ideology.md" not in scaffold_dests, (
+            "docs/ideology.md must NOT be in SCAFFOLD_FILES — handled by _check_ideology_staleness"
+        )
+        assert "docs/ideology.md" not in existence_dests, (
+            "docs/ideology.md must NOT be in EXISTENCE_CHECK_FILES"
+        )
+
+    def test_other_findings_unaffected_by_ideology_check(self, tmp_path: Path) -> None:
+        """Ideology staleness check does not interfere with other audit findings."""
+        _write_state(tmp_path)
+        _copy_canonical_files(tmp_path)
+        # Remove CLAUDE.md to trigger a separate MISSING finding
+        (tmp_path / "CLAUDE.md").unlink()
+        # Keep ideology.md with real content
+        _write_ideology_md(tmp_path, stale=False)
+
+        result = audit_project(tmp_path)
+
+        claude_missing = [i for i in result.missing if i.file == "CLAUDE.md"]
+        assert len(claude_missing) > 0, (
+            "Expected MISSING items for CLAUDE.md even with real ideology.md present"
+        )
+        ideology_findings = [
+            i for i in result.missing + result.inconsistent
+            if i.file == "docs/ideology.md"
+        ]
+        assert ideology_findings == [], (
+            f"Expected no ideology findings when ideology.md has real content: {ideology_findings}"
         )

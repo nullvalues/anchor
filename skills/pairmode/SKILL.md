@@ -120,6 +120,11 @@ AUDIT: <project_name> vs pairmode v<version>
 MISSING
   ✗ <file>: <description>
 
+STALE PLACEHOLDER
+  ⚠ docs/ideology.md: all sections contain placeholder text
+    Recommendation: run bootstrap in TTY to trigger guided ideology capture,
+    or edit docs/ideology.md directly.
+
 INCONSISTENT
   ~ <file>: <description>
 
@@ -130,6 +135,14 @@ RECOMMENDATION
   Run /anchor:pairmode sync to apply missing/inconsistent items
   Project-specific items will be preserved
 ```
+
+**Ideology staleness detection:**
+`docs/ideology.md` is checked separately from scaffold files (not in `SCAFFOLD_FILES` or
+`EXISTENCE_CHECK_FILES`). The check uses `_check_ideology_staleness()`:
+- `docs/ideology.md` absent → `MISSING` finding
+- All required sections contain only placeholder text (`_(not yet specified…`) → `STALE PLACEHOLDER`
+  finding with recommendation to run guided ideology capture
+- At least one section has real content → clean (no finding)
 
 **Outputs:**
 - A human-readable audit report printed to the session, summarizing all deltas and recommended
