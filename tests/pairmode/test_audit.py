@@ -1815,7 +1815,7 @@ class TestCheckReconstructionStaleness:
         """Generated brief with real content in one required section → returns 'OK'."""
         content = (
             _PLACEHOLDER_RECONSTRUCTION.rstrip() + "\n\n"
-            "## Ideology adherence\n\n"
+            "## Comparison rubric\n\n"
             "The implementation expresses the core convictions fully.\n"
         )
         _write_reconstruction_md(tmp_path, content)
@@ -1883,12 +1883,12 @@ class TestAuditReconstructionMd:
     def test_generated_brief_with_real_content_in_one_section_is_clean(
         self, tmp_path: Path
     ) -> None:
-        """Generated brief with real content in ## Ideology adherence → no finding."""
+        """Generated brief with real content in ## Comparison rubric → no finding."""
         _write_state(tmp_path)
         _copy_canonical_files(tmp_path)
         content = (
             _PLACEHOLDER_RECONSTRUCTION.rstrip() + "\n\n"
-            "## Ideology adherence\n\n"
+            "## Comparison rubric\n\n"
             "The implementation expresses the core convictions fully.\n"
         )
         _write_reconstruction_md(tmp_path, content)

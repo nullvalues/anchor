@@ -314,9 +314,44 @@ Document `--from-reconstruction` in the bootstrap section.
 
 ---
 
-⚙️  DEVELOPER ACTION — Verify audit clean after Story 12.2
+### Story 12.2.1 — Fix RECONSTRUCTION_REQUIRED_SECTIONS to match brief template
 
-After 12.2 passes review:
+**Acceptance criterion:** `_check_reconstruction_staleness` returns `"OK"` for anchor's own
+`docs/reconstruction.md` (which is a generated brief with real ideology content). Tests pass.
+`audit.py --project-dir .` shows no STALE PLACEHOLDER finding for `docs/reconstruction.md`.
+
+**Instructions:**
+
+The developer action gate after Story 12.2 revealed a bug: `RECONSTRUCTION_REQUIRED_SECTIONS`
+in `audit.py` lists sections from the *scoring report template* (`## Ideology adherence`,
+`## Constraint compliance`, etc.) but the generated *brief* has completely different sections
+(`## Non-negotiable ideology`, `## What must survive any implementation`, etc.).
+Since none of the required sections exist in the brief, the function can never find real content
+and always returns `"STALE"`.
+
+Fix: update the constants in `audit.py` to use sections that actually appear in the generated
+brief template (`docs/reconstruction.md.j2`):
+
+```python
+RECONSTRUCTION_REQUIRED_SECTIONS = [
+    "## Non-negotiable ideology",
+    "## What must survive any implementation",
+    "## Comparison rubric",
+    "## Instructions for the reconstruction agent",
+]
+```
+
+Also update any test fixtures in `test_audit.py` that construct fake reconstruction.md content
+to use these corrected section names (so stale-detection tests still exercise the right paths).
+
+**Tests:** Full suite passes. `_check_reconstruction_staleness(project_dir)` returns `"OK"` for
+anchor's own `docs/reconstruction.md`.
+
+---
+
+⚙️  DEVELOPER ACTION — Verify audit clean after Story 12.2.1
+
+After 12.2.1 passes review:
 
 ```bash
 PATH=$HOME/.local/bin:$PATH uv run python skills/pairmode/scripts/audit.py --project-dir .

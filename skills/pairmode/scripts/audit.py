@@ -114,10 +114,9 @@ IDEOLOGY_REQUIRED_SECTIONS = [
 
 RECONSTRUCTION_PLACEHOLDER_MARKER = "_(not set)_"
 RECONSTRUCTION_REQUIRED_SECTIONS = [
-    "## Ideology adherence",
-    "## Constraint compliance",
-    "## Comparison rubric scores",
-    "## Summary verdict",
+    "## Non-negotiable ideology",
+    "## What must survive any implementation",
+    "## Comparison rubric",
 ]
 
 
@@ -196,10 +195,14 @@ def _check_reconstruction_staleness(project_dir: Path) -> str | None:
         body = match.group(1)
         lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
         for line in lines:
-            # Skip Jinja2 comments and placeholder text
+            # Skip Jinja2 comments, placeholder text, and horizontal rules
             if line.startswith("{#"):
                 continue
             if line.startswith("_"):
+                continue
+            if re.match(r"^-{3,}$", line):
+                continue
+            if line.startswith(">"):
                 continue
             # Found a real content line
             found_real_content = True
