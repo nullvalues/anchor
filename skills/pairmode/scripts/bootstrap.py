@@ -538,7 +538,9 @@ def bootstrap(
         "why": why or "",
         "core_beliefs": "",
         "accepted_tradeoffs": "",
-        "must_preserve": "",
+        # brief.md.j2 expects a string; ideology.md.j2 expects a list — use separate keys.
+        "must_preserve_str": "",   # newline-joined string for brief.md.j2
+        "must_preserve": [],       # list form for ideology.md.j2
         "operator_contact": product.get("operator_contact", ""),
         "build_command": build_command,
         "test_command": test_command,
@@ -560,15 +562,15 @@ def bootstrap(
         "value_hierarchy": ideology_context.get("value_hierarchy", []),
         "constraints": ideology_context.get("constraints", []),
         "fingerprints": [],
-        # must_preserve is defined above (shared with brief.md.j2) — empty string is falsy
-        # so ideology.md.j2's {% if must_preserve %} guard works correctly
         "should_question": [],
         "free_to_change": [],
         "comparison_dimensions": [],
     }
-    # Merge ideology_context must_preserve into context (overrides the empty-string default)
-    if ideology_context.get("must_preserve"):
-        context["must_preserve"] = ideology_context["must_preserve"]
+    # Merge ideology_context must_preserve into context.
+    # must_preserve (list) → ideology.md.j2; must_preserve_str (string) → brief.md.j2.
+    mp_list = ideology_context.get("must_preserve", [])
+    context["must_preserve"] = mp_list
+    context["must_preserve_str"] = "\n".join(f"- {item}" for item in mp_list) if mp_list else ""
 
     # ------------------------------------------------------------------
     # 4. Render and write scaffold files

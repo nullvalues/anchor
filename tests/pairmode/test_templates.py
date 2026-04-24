@@ -149,7 +149,7 @@ BRIEF_MD_CONTEXT = {
     "why": "Existing solutions lack fine-grained role management required by our enterprise customers.",
     "core_beliefs": "We prefer X.",
     "accepted_tradeoffs": "We gave up Y for Z.",
-    "must_preserve": "The data contract.",
+    "must_preserve_str": "The data contract.",
     "operator_contact": "alice@example.com",
 }
 
@@ -161,7 +161,7 @@ BRIEF_MD_EMPTY_CONTEXT = {
     "why": "",
     "core_beliefs": "",
     "accepted_tradeoffs": "",
-    "must_preserve": "",
+    "must_preserve_str": "",
     "operator_contact": "",
 }
 
@@ -227,7 +227,7 @@ BRIEF_MD_IDEOLOGY_EMPTY_CONTEXT = {
     "why": "",
     "core_beliefs": "",
     "accepted_tradeoffs": "",
-    "must_preserve": "",
+    "must_preserve_str": "",
     "operator_contact": "",
 }
 
@@ -1429,3 +1429,69 @@ class TestIntentReviewerIdeologyDrift:
 
     def test_recommended_doc_edits_still_present_regression(self):
         assert "RECOMMENDED DOC EDITS" in self.output
+
+
+# ---------------------------------------------------------------------------
+# Story 11.0 — must_preserve dual-key contract tests
+# ---------------------------------------------------------------------------
+
+class TestBriefMdMustPreserveStr:
+    """Story 11.0: brief.md.j2 uses must_preserve_str (string), not must_preserve (list)."""
+
+    def test_must_preserve_str_value_renders_in_brief_md(self):
+        """Providing must_preserve_str renders the string content, not a list repr."""
+        ctx = {**BRIEF_MD_IDEOLOGY_EMPTY_CONTEXT, "must_preserve_str": "- prefer X\n- prefer Y"}
+        output = render("docs/brief.md.j2", ctx)
+        assert "prefer X" in output
+        assert "prefer Y" in output
+
+    def test_must_preserve_str_no_list_repr_in_brief_md(self):
+        """must_preserve_str renders as prose — no Python list repr like ['item']."""
+        ctx = {**BRIEF_MD_IDEOLOGY_EMPTY_CONTEXT, "must_preserve_str": "- prefer X\n- prefer Y"}
+        output = render("docs/brief.md.j2", ctx)
+        assert "['prefer X'" not in output
+        assert "['prefer X', 'prefer Y']" not in output
+
+    def test_empty_must_preserve_str_shows_placeholder(self):
+        """Empty must_preserve_str renders the placeholder text."""
+        ctx = {**BRIEF_MD_IDEOLOGY_EMPTY_CONTEXT, "must_preserve_str": ""}
+        output = render("docs/brief.md.j2", ctx)
+        assert "_(not yet specified — which values, constraints, or behaviors must survive" in output
+
+    def test_must_preserve_str_key_used_not_must_preserve(self):
+        """brief.md.j2 renders correctly with must_preserve_str key present (no StrictUndefined error)."""
+        # Omitting 'must_preserve' key entirely — template should not reference it
+        ctx = {
+            "project_name": "myapp",
+            "what": "",
+            "why": "",
+            "core_beliefs": "",
+            "accepted_tradeoffs": "",
+            "must_preserve_str": "- key item",
+            "operator_contact": "",
+        }
+        output = render("docs/brief.md.j2", ctx)
+        assert "key item" in output
+
+
+class TestIdeologyMdMustPreserveList:
+    """Story 11.0: ideology.md.j2 uses must_preserve as a list via {% for %}."""
+
+    def test_must_preserve_list_renders_via_for_loop(self):
+        """ideology.md.j2 iterates must_preserve list and renders each item."""
+        ctx = {**IDEOLOGY_EMPTY_CONTEXT, "must_preserve": ["item one", "item two"]}
+        output = render("docs/ideology.md.j2", ctx)
+        assert "item one" in output
+        assert "item two" in output
+
+    def test_must_preserve_list_no_python_repr(self):
+        """ideology.md.j2 does not produce a Python list repr for must_preserve."""
+        ctx = {**IDEOLOGY_EMPTY_CONTEXT, "must_preserve": ["item one", "item two"]}
+        output = render("docs/ideology.md.j2", ctx)
+        assert "['item one'" not in output
+
+    def test_must_preserve_empty_list_shows_placeholder(self):
+        """Empty must_preserve list renders the placeholder text in ideology.md."""
+        ctx = {**IDEOLOGY_EMPTY_CONTEXT, "must_preserve": []}
+        output = render("docs/ideology.md.j2", ctx)
+        assert "Derive from the accepted constraints" in output

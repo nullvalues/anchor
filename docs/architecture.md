@@ -245,10 +245,9 @@ etc.); body-level content comparison should not be relied upon for semantic drif
 
 ### Pairmode non-negotiables
 
-- The `must_preserve` template context variable has a dual type contract: it is a string
-  for `brief.md.j2` and a list for `ideology.md.j2`. When both templates share a single
-  context dict, the caller must resolve this before rendering — either join the list to a
-  string for brief.md, or use separate keys (`must_preserve_str` / `must_preserve_list`).
+- Template context uses separate keys for brief.md and ideology.md must-preserve content:
+  `must_preserve_str` (newline-joined string) for `brief.md.j2`; `must_preserve` (list)
+  for `ideology.md.j2`. Do not merge these back into a single key.
 
 - Lessons are append-only. Existing lesson entries may only have their `status` field updated.
 - Templates must render correctly for projects with no prior Anchor spec (blank-slate bootstrap).
