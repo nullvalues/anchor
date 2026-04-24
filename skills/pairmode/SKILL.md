@@ -40,6 +40,7 @@ re-scaffolding a project after a major methodology revision.
 - `CLAUDE.build.md` — build orchestrator instructions (root)
 - `docs/brief.md` — project brief
 - `docs/ideology.md` — intent and conviction record
+- `docs/reconstruction.md` — reconstruction brief for independent agent
 - `docs/architecture.md` — architecture reference
 - `docs/checkpoints.md` — checkpoint tag commands
 - `docs/phases/index.md` — phase index table

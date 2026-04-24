@@ -1508,3 +1508,69 @@ class TestMustPreserveDualKeyContract:
         assert "item one" in output
         assert "item two" in output
         assert "['item one'" not in output
+
+
+# ---------------------------------------------------------------------------
+# Story 11.2 — reconstruction.md bootstrap tests
+# ---------------------------------------------------------------------------
+
+class TestReconstructionMdBootstrap:
+    """Bootstrap renders docs/reconstruction.md from the template."""
+
+    def test_bootstrap_writes_reconstruction_md(self, tmp_path):
+        result = run_bootstrap(tmp_path)
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "docs/reconstruction.md").exists(), (
+            "Bootstrap must write docs/reconstruction.md"
+        )
+
+    def test_reconstruction_md_has_non_negotiable_ideology_heading(self, tmp_path):
+        run_bootstrap(tmp_path)
+        content = (tmp_path / "docs/reconstruction.md").read_text(encoding="utf-8")
+        assert "## Non-negotiable ideology" in content
+
+    def test_reconstruction_md_has_instructions_heading(self, tmp_path):
+        run_bootstrap(tmp_path)
+        content = (tmp_path / "docs/reconstruction.md").read_text(encoding="utf-8")
+        assert "## Instructions for the reconstruction agent" in content
+
+    def test_edit_reconstruction_md_in_default_deny(self):
+        assert "Edit(docs/reconstruction.md)" in DEFAULT_DENY
+
+    def test_write_reconstruction_md_in_default_deny(self):
+        assert "Write(docs/reconstruction.md)" in DEFAULT_DENY
+
+    def test_reconstruction_md_existing_file_prompts_confirmation(self, tmp_path):
+        """Bootstrap on existing project with docs/reconstruction.md present prompts for
+        confirmation before overwriting — it does not overwrite silently."""
+        run_bootstrap(tmp_path)
+
+        # Write sentinel content into reconstruction.md
+        (tmp_path / "docs/reconstruction.md").write_text("sentinel content", encoding="utf-8")
+
+        # Second run — simulate user declining all overwrite prompts
+        runner = CliRunner()
+        result = runner.invoke(
+            bootstrap,
+            [
+                "--project-dir", str(tmp_path),
+                "--project-name", "testproject",
+                "--stack", "Python / pytest",
+                "--build-command", "uv run pytest",
+            ],
+            input="n\n" * 20,
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0, result.output
+        # File should still have the sentinel content (not overwritten silently)
+        assert (tmp_path / "docs/reconstruction.md").read_text(encoding="utf-8") == "sentinel content"
+
+    def test_conviction_flag_appears_in_reconstruction_md(self, tmp_path):
+        """--conviction 'we prefer X': conviction appears in docs/reconstruction.md."""
+        result = run_bootstrap(
+            tmp_path,
+            extra_args=["--conviction", "we prefer X"],
+        )
+        assert result.exit_code == 0, result.output
+        content = (tmp_path / "docs/reconstruction.md").read_text(encoding="utf-8")
+        assert "we prefer X" in content

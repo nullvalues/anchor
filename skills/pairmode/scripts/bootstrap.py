@@ -40,6 +40,7 @@ SCAFFOLD_FILES: list[tuple[str, str]] = [
     ("CLAUDE.build.md", "CLAUDE.build.md.j2"),
     ("docs/brief.md", "docs/brief.md.j2"),
     ("docs/ideology.md", "docs/ideology.md.j2"),
+    ("docs/reconstruction.md", "docs/reconstruction.md.j2"),
     ("docs/architecture.md", "docs/architecture.md.j2"),
     ("docs/checkpoints.md", "docs/checkpoints.md.j2"),
     ("docs/cer/backlog.md", "docs/cer/backlog.md.j2"),
@@ -71,6 +72,8 @@ DEFAULT_DENY: list[str] = [
     "Write(docs/brief.md)",
     "Edit(docs/ideology.md)",
     "Write(docs/ideology.md)",
+    "Edit(docs/reconstruction.md)",
+    "Write(docs/reconstruction.md)",
 ]
 
 # Universal checklist items always included in templates
@@ -565,6 +568,10 @@ def bootstrap(
         "should_question": [],
         "free_to_change": [],
         "comparison_dimensions": [],
+        # reconstruction.md.j2 variables
+        "reconstruction_what": what or "",
+        "reconstruction_why": why or "",
+        "generated_date": datetime.date.today().isoformat(),
     }
     # Merge ideology_context must_preserve into context.
     # must_preserve (list) → ideology.md.j2; must_preserve_str (string) → brief.md.j2.
