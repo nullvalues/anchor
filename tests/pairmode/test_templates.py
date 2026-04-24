@@ -1495,3 +1495,68 @@ class TestIdeologyMdMustPreserveList:
         ctx = {**IDEOLOGY_EMPTY_CONTEXT, "must_preserve": []}
         output = render("docs/ideology.md.j2", ctx)
         assert "Derive from the accepted constraints" in output
+
+
+# ---------------------------------------------------------------------------
+# Story 11.1 — reconstruction.md.j2 template tests
+# ---------------------------------------------------------------------------
+
+RECONSTRUCTION_EMPTY_CONTEXT: dict = {}
+
+
+def render_lenient(template_name: str, context: dict) -> str:
+    """Render a template with lenient (non-strict) undefined handling.
+
+    Used for partial-context tests where some variables are intentionally absent.
+    """
+    loader = jinja2.FileSystemLoader(str(TEMPLATES_DIR))
+    env = jinja2.Environment(loader=loader, undefined=jinja2.Undefined)
+    template = env.get_template(template_name)
+    return template.render(**context)
+
+
+class TestReconstructionMdTemplate:
+    """Tests for docs/reconstruction.md.j2."""
+
+    def test_renders_without_error_empty_context(self):
+        output = render_lenient("docs/reconstruction.md.j2", {})
+        assert output
+
+    def test_what_you_are_building_section_present(self):
+        output = render_lenient("docs/reconstruction.md.j2", {})
+        assert "## What you are building" in output
+
+    def test_non_negotiable_ideology_section_present(self):
+        output = render_lenient("docs/reconstruction.md.j2", {})
+        assert "## Non-negotiable ideology" in output
+
+    def test_what_must_survive_section_present(self):
+        output = render_lenient("docs/reconstruction.md.j2", {})
+        assert "## What must survive any implementation" in output
+
+    def test_comparison_rubric_section_present(self):
+        output = render_lenient("docs/reconstruction.md.j2", {})
+        assert "## Comparison rubric" in output
+
+    def test_instructions_for_reconstruction_agent_section_present(self):
+        output = render_lenient("docs/reconstruction.md.j2", {})
+        assert "## Instructions for the reconstruction agent" in output
+
+    def test_conviction_renders_when_provided(self):
+        output = render_lenient("docs/reconstruction.md.j2", {"convictions": ["We prefer X"]})
+        assert "We prefer X" in output
+
+    def test_constraint_name_rule_rationale_render(self):
+        ctx = {
+            "constraints": [
+                {"name": "C1", "rule": "never do X", "rationale": "because Y"}
+            ]
+        }
+        output = render_lenient("docs/reconstruction.md.j2", ctx)
+        assert "C1" in output
+        assert "never do X" in output
+        assert "because Y" in output
+
+    def test_project_name_in_title(self):
+        output = render_lenient("docs/reconstruction.md.j2", {"project_name": "TestProject"})
+        assert "TestProject" in output
