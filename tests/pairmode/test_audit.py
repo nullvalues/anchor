@@ -1700,3 +1700,33 @@ class TestAuditIdeologyMd:
         assert ideology_findings == [], (
             f"Expected no ideology findings when ideology.md has real content: {ideology_findings}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Story 10.6: path traversal containment guard
+# ---------------------------------------------------------------------------
+
+
+class TestAuditPathTraversalGuard:
+    """audit_project() must reject paths that are too close to the filesystem root."""
+
+    def test_root_dir_raises_system_exit(self):
+        """Calling audit_project('/') raises SystemExit."""
+        with pytest.raises(SystemExit) as exc_info:
+            audit_project(Path("/"))
+        assert exc_info.value.code != 0
+
+    def test_etc_dir_raises_system_exit(self):
+        """Calling audit_project('/etc') raises SystemExit."""
+        with pytest.raises(SystemExit) as exc_info:
+            audit_project(Path("/etc"))
+        assert exc_info.value.code != 0
+
+    def test_valid_project_dir_succeeds(self, tmp_path):
+        """A valid project dir with 3+ path parts does not raise SystemExit (regression)."""
+        _copy_canonical_files(tmp_path)
+        _write_ideology_md(tmp_path, stale=False)
+        _write_state(tmp_path)
+        # Should not raise — may return a result with findings but must not exit
+        result = audit_project(tmp_path)
+        assert isinstance(result, AuditResult)

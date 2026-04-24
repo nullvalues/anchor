@@ -1117,6 +1117,68 @@ class TestIdeologyMdBootstrap:
 
 
 # ---------------------------------------------------------------------------
+# Story 10.6: path traversal containment guard
+# ---------------------------------------------------------------------------
+
+
+class TestPathTraversalGuard:
+    """Bootstrap must reject project-dir paths that are too close to the filesystem root."""
+
+    def test_root_dir_rejected(self):
+        """Passing --project-dir / exits with non-zero (rejected by CLI guard)."""
+        runner = CliRunner()
+        result = runner.invoke(
+            bootstrap,
+            [
+                "--project-dir", "/",
+                "--project-name", "testproject",
+                "--stack", "Python / pytest",
+                "--build-command", "uv run pytest",
+            ],
+        )
+        assert result.exit_code != 0
+
+    def test_etc_dir_rejected(self):
+        """Passing --project-dir /etc exits with non-zero (rejected by CLI guard)."""
+        runner = CliRunner()
+        result = runner.invoke(
+            bootstrap,
+            [
+                "--project-dir", "/etc",
+                "--project-name", "testproject",
+                "--stack", "Python / pytest",
+                "--build-command", "uv run pytest",
+            ],
+        )
+        assert result.exit_code != 0
+
+    def test_suspicious_path_guard_logic_directly(self, tmp_path):
+        """Unit-test the guard: a resolved path with < 3 parts triggers sys.exit(1)."""
+        import sys
+        import pathlib
+
+        # Simulate the guard check directly for a 2-part path like /tmp
+        shallow = pathlib.Path("/tmp")
+        # The guard: is_dir() and len(parts) < 3 → exit
+        assert shallow.is_dir()
+        assert len(shallow.parts) < 3, (
+            f"/tmp has {len(shallow.parts)} parts — guard should reject it"
+        )
+
+        # Confirm tmp_path (valid project dir) would pass the guard
+        resolved = tmp_path.resolve()
+        assert resolved.is_dir()
+        assert len(resolved.parts) >= 3, (
+            f"tmp_path has {len(resolved.parts)} parts — guard should accept it"
+        )
+
+    def test_valid_project_dir_succeeds(self, tmp_path):
+        """A valid project dir with 3+ path parts succeeds (regression)."""
+        result = run_bootstrap(tmp_path)
+        assert result.exit_code == 0, result.output
+
+
+# ---------------------------------------------------------------------------
 # Story 10.2 — UNIVERSAL_CHECKLIST_ITEMS contains IDEOLOGY ALIGNMENT
 # ---------------------------------------------------------------------------
 

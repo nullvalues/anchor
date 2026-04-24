@@ -389,6 +389,16 @@ def bootstrap(
     project_path = pathlib.Path(project_dir).resolve()
 
     # ------------------------------------------------------------------
+    # 0. Security: path traversal containment guard
+    # ------------------------------------------------------------------
+    if not project_path.is_dir() or len(project_path.parts) < 3:
+        click.echo(
+            f"error: project-dir resolves to a suspicious path: {project_path}",
+            err=True,
+        )
+        sys.exit(1)
+
+    # ------------------------------------------------------------------
     # 1. Gather values: CLI → product.json → prompt
     # ------------------------------------------------------------------
     product = _load_product_json(project_path)

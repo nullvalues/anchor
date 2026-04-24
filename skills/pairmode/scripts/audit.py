@@ -340,6 +340,14 @@ def audit_project(project_dir: Path, applies_to: str = "all") -> AuditResult:
     """
     project_dir = Path(project_dir).resolve()
 
+    # Security: path traversal containment guard
+    if not project_dir.is_dir() or len(project_dir.parts) < 3:
+        click.echo(
+            f"error: project-dir resolves to a suspicious path: {project_dir}",
+            err=True,
+        )
+        sys.exit(1)
+
     # Load saved template context (for rendering templates before comparison)
     context, context_found = _load_project_context(project_dir)
 
