@@ -245,7 +245,7 @@ def reconstruct(project_dir: str, force: bool) -> None:
     resolved = Path(project_dir).resolve()
 
     # Path traversal guard (same as bootstrap/audit/sync)
-    if len(resolved.parts) < 3 or not resolved.is_dir():
+    if not resolved.is_dir() or len(resolved.parts) < 3:
         click.echo(
             f"error: project-dir resolves to a suspicious path: {resolved}",
             err=True,
