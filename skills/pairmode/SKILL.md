@@ -298,6 +298,38 @@ typically before a major bootstrap or sync campaign across projects.
 
 ---
 
+### `/anchor:pairmode reconstruct`
+
+**When to use:** After populating `docs/ideology.md`, or any time the ideology evolves and
+`docs/reconstruction.md` needs refreshing without a full bootstrap.
+
+**Inputs expected:**
+- `docs/ideology.md` in the target project (required).
+- `docs/brief.md` (optional — used for what/why context).
+- Target project root path (defaults to current directory).
+
+**What it does:**
+1. Reads and parses `docs/ideology.md` to extract convictions, constraints, must-preserve
+   items, free-to-change items, should-question items, and comparison dimensions.
+2. Reads `docs/brief.md` (if present) for what/why context.
+3. Renders `docs/reconstruction.md` — the handoff prompt for a blank-slate reconstruction agent.
+4. Prompts for confirmation if `docs/reconstruction.md` already exists (use `--force` to skip).
+
+**Outputs:**
+- `docs/reconstruction.md` at the target project root.
+
+**CLI invocation:**
+```bash
+PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scripts/reconstruct.py" \
+  --project-dir "$(pwd)"
+```
+
+**Flags:**
+- `--project-dir PATH` — target project root (default: current directory)
+- `--force` — overwrite existing `docs/reconstruction.md` without prompting
+
+---
+
 ### `/anchor:pairmode phase-new`
 
 > **Note:** `phase-new` is invoked directly via CLI, not through the pairmode skill dispatcher.
