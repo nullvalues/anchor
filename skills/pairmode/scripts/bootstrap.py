@@ -76,6 +76,8 @@ DEFAULT_DENY: list[str] = [
     "Write(docs/ideology.md)",
     "Edit(docs/reconstruction.md)",
     "Write(docs/reconstruction.md)",
+    "Edit(docs/RECONSTRUCTION.md)",
+    "Write(docs/RECONSTRUCTION.md)",
 ]
 
 # Universal checklist items always included in templates

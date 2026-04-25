@@ -345,6 +345,29 @@ PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scr
 
 ---
 
+### `/anchor:pairmode score`
+
+**When to use:** After completing a reconstruction implementation, to render a pre-populated
+scoring report ready to fill in.
+
+**What it does:**
+1. Reads `docs/reconstruction.md` (or `--brief PATH`) to extract convictions, constraints, and rubric dimensions.
+2. Renders `RECONSTRUCTION.md.j2` with those values pre-filled.
+3. Writes `docs/RECONSTRUCTION.md` — the scoring report for the reconstruction agent to complete.
+
+**CLI invocation:**
+```bash
+PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scripts/score.py" \
+  --project-dir "$(pwd)"
+```
+
+**Flags:**
+- `--project-dir PATH` — root of the reconstructed project (default: current directory)
+- `--brief PATH` — path to reconstruction.md brief (default: `<project-dir>/docs/reconstruction.md`)
+- `--force` — overwrite existing `docs/RECONSTRUCTION.md` without prompting
+
+---
+
 ### `/anchor:pairmode phase-new`
 
 > **Note:** `phase-new` is invoked directly via CLI, not through the pairmode skill dispatcher.
