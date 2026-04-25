@@ -92,6 +92,14 @@ or `--constraint` flags to populate it non-interactively.
 - `--ideology-skip` — skip guided ideology capture; write placeholder `docs/ideology.md`
 - `--conviction TEXT` — core conviction (repeatable); bypasses TTY prompt, populates ideology.md directly
 - `--constraint TEXT` — key constraint rule (repeatable); bypasses TTY prompt, populates ideology.md directly
+- `--from-reconstruction PATH` — path to a `reconstruction.md` brief; pre-populates ideology context from it, seeding a new pairmode project without manual TTY entry
+
+**Pre-populating from a reconstruction brief:**
+```bash
+# Pass a reconstruction.md brief to pre-populate ideology context
+PYTHONPATH="${CLAUDE_SKILL_DIR}/../../.." uv run python "${CLAUDE_SKILL_DIR}/scripts/bootstrap.py" \
+  --project-dir "$(pwd)" --from-reconstruction path/to/reconstruction.md
+```
 
 ---
 

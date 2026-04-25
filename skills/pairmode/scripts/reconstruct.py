@@ -8,14 +8,16 @@ refreshes) docs/reconstruction.md without requiring a full bootstrap.
 from __future__ import annotations
 
 import datetime
-import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent))
 
 import click
 import jinja2
+
+import ideology_parser as _ideology_parser
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -23,163 +25,29 @@ import jinja2
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 
-IDEOLOGY_PLACEHOLDER_MARKER = "_(not yet specified"
-
 
 # ---------------------------------------------------------------------------
-# HTML comment stripping
+# Ideology parsing (delegates to shared ideology_parser module)
 # ---------------------------------------------------------------------------
-
-def _strip_html_comments(text: str) -> str:
-    """Remove HTML comments (<!-- ... -->) from text."""
-    return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
-
-
-# ---------------------------------------------------------------------------
-# Ideology parsing
-# ---------------------------------------------------------------------------
-
-def _extract_top_level_sections(text: str) -> dict[str, str]:
-    """Split text by ## headings, returning {heading_text: body_text} mapping."""
-    # Split on ## headings (not ###)
-    parts = re.split(r"^(##\s+[^\n]+)$", text, flags=re.MULTILINE)
-    sections: dict[str, str] = {}
-    i = 0
-    while i < len(parts):
-        chunk = parts[i]
-        if re.match(r"^##\s+", chunk):
-            heading = chunk.strip()
-            body = parts[i + 1] if (i + 1) < len(parts) else ""
-            sections[heading] = body
-            i += 2
-        else:
-            i += 1
-    return sections
-
-
-def _extract_subsections(text: str) -> dict[str, str]:
-    """Split text by ### headings, returning {heading_text: body_text} mapping."""
-    parts = re.split(r"^(###\s+[^\n]+)$", text, flags=re.MULTILINE)
-    sections: dict[str, str] = {}
-    i = 0
-    while i < len(parts):
-        chunk = parts[i]
-        if re.match(r"^###\s+", chunk):
-            heading = chunk.strip()
-            body = parts[i + 1] if (i + 1) < len(parts) else ""
-            sections[heading] = body
-            i += 2
-        else:
-            i += 1
-    return sections
-
-
-def _bullet_lines(body: str) -> list[str]:
-    """Extract bullet lines from body, skipping placeholders and empty lines."""
-    lines = []
-    for line in body.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if stripped.startswith(IDEOLOGY_PLACEHOLDER_MARKER):
-            continue
-        if stripped.startswith("- "):
-            lines.append(stripped[2:])
-        elif stripped.startswith("-"):
-            lines.append(stripped[1:].strip())
-    return lines
-
-
-def _find_section(sections: dict[str, str], keyword: str) -> str:
-    """Return body for section whose heading contains keyword (case-insensitive)."""
-    keyword_lower = keyword.lower()
-    for heading, body in sections.items():
-        if keyword_lower in heading.lower():
-            return body
-    return ""
-
 
 def parse_ideology(text: str) -> dict:
-    """Parse ideology.md text into a context dict for the reconstruction template."""
-    text = _strip_html_comments(text)
+    """Parse ideology.md text into a context dict for the reconstruction template.
 
-    # Extract project_name from first line: # Ideology — ProjectName
-    project_name = ""
-    for line in text.splitlines():
-        line = line.strip()
-        if line.startswith("# "):
-            # e.g. "# Ideology — ProjectName" or "# Ideology - ProjectName"
-            rest = re.sub(r"^#\s+", "", line)
-            # strip "Ideology — " or "Ideology - " prefix
-            rest = re.sub(r"^[Ii]deology\s*[—\-–]\s*", "", rest).strip()
-            project_name = rest
-            break
-
-    top_sections = _extract_top_level_sections(text)
-
-    # --- Core convictions ---
-    convictions_body = _find_section(top_sections, "core convictions")
-    convictions = _bullet_lines(convictions_body)
-
-    # --- Value hierarchy ---
-    value_hierarchy_body = _find_section(top_sections, "value hierarchy")
-    value_hierarchy = _bullet_lines(value_hierarchy_body)
-
-    # --- Accepted constraints ---
-    constraints_body = _find_section(top_sections, "accepted constraints")
-    constraints = []
-    constraint_subsections = _extract_subsections(constraints_body)
-    for sub_heading, sub_body in constraint_subsections.items():
-        name = re.sub(r"^###\s*", "", sub_heading).strip()
-        if name.startswith("_(not yet specified"):
-            continue
-        rule = ""
-        rationale = ""
-        for line in sub_body.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("**Rule:**"):
-                rule = stripped[len("**Rule:**"):].strip()
-            elif stripped.startswith("**Rationale:**"):
-                rationale = stripped[len("**Rationale:**"):].strip()
-        constraints.append({"name": name, "rule": rule, "rationale": rationale})
-
-    # --- Reconstruction guidance ---
-    reconstruction_body = _find_section(top_sections, "reconstruction guidance")
-    recon_subsections = _extract_subsections(reconstruction_body)
-
-    must_preserve_body = _find_section(recon_subsections, "must preserve")
-    must_preserve = _bullet_lines(must_preserve_body)
-
-    should_question_body = _find_section(recon_subsections, "should question")
-    should_question = _bullet_lines(should_question_body)
-
-    free_to_change_body = _find_section(recon_subsections, "free to change")
-    free_to_change = _bullet_lines(free_to_change_body)
-
-    # --- Comparison basis ---
-    comparison_body = _find_section(top_sections, "comparison basis")
-    comparison_dimensions = []
-    for line in comparison_body.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if stripped.startswith(IDEOLOGY_PLACEHOLDER_MARKER):
-            continue
-        # Pattern: - **Name:** description
-        m = re.match(r"^-\s+\*\*(.+?)\*\*:\s*(.+)$", stripped)
-        if m:
-            comparison_dimensions.append({"name": m.group(1), "description": m.group(2)})
-
-    return {
-        "project_name": project_name,
-        "convictions": convictions,
-        "value_hierarchy": value_hierarchy,
-        "constraints": constraints,
-        "must_preserve": must_preserve,
-        "should_question": should_question,
-        "free_to_change": free_to_change,
-        "comparison_dimensions": comparison_dimensions,
-    }
+    Delegates to ideology_parser; kept here for backward compatibility with
+    any callers that import directly from reconstruct.
+    """
+    import tempfile
+    import os
+    # Write to a temp file so ideology_parser.parse_ideology_file can read it
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".md", delete=False, encoding="utf-8"
+    ) as tmp:
+        tmp.write(text)
+        tmp_path = tmp.name
+    try:
+        return _ideology_parser.parse_ideology_file(Path(tmp_path))
+    finally:
+        os.unlink(tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +56,7 @@ def parse_ideology(text: str) -> dict:
 
 def parse_brief(text: str) -> dict[str, str]:
     """Extract reconstruction_what and reconstruction_why from brief.md."""
-    top_sections = _extract_top_level_sections(text)
+    top_sections = _ideology_parser._extract_top_level_sections(text)
 
     what = ""
     why = ""
@@ -263,8 +131,7 @@ def reconstruct(project_dir: str, force: bool) -> None:
         sys.exit(1)
 
     # Parse ideology.md
-    ideology_text = ideology_path.read_text(encoding="utf-8")
-    ideology_ctx = parse_ideology(ideology_text)
+    ideology_ctx = _ideology_parser.parse_ideology_file(ideology_path)
 
     # Parse brief.md (optional)
     brief_path = resolved / "docs" / "brief.md"

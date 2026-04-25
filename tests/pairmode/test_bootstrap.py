@@ -1574,3 +1574,149 @@ class TestReconstructionMdBootstrap:
         assert result.exit_code == 0, result.output
         content = (tmp_path / "docs/reconstruction.md").read_text(encoding="utf-8")
         assert "we prefer X" in content
+
+
+# ---------------------------------------------------------------------------
+# Story 12.3: --from-reconstruction flag tests
+# ---------------------------------------------------------------------------
+
+MINIMAL_RECONSTRUCTION_BRIEF = """\
+# Reconstruction Brief — TestProject
+
+## Non-negotiable ideology
+
+### Convictions
+
+- We prefer clarity over cleverness in all things.
+
+### Constraints
+
+_(no constraints recorded)_
+
+## What must survive any implementation
+
+- The event-driven messaging contract.
+
+## What you are free to change
+
+- The file structure.
+
+## What you should question
+
+- The synchronous fallback path.
+
+## Comparison rubric
+
+- **Correctness:** Does it behave correctly under edge cases?
+"""
+
+
+class TestFromReconstructionFlag:
+    """Story 12.3: --from-reconstruction pre-populates ideology context from a brief."""
+
+    def _write_brief(self, tmp_path: pathlib.Path, content: str) -> pathlib.Path:
+        """Write a reconstruction.md brief to a temp file outside the project dir."""
+        brief_path = tmp_path / "reconstruction_input.md"
+        brief_path.write_text(content, encoding="utf-8")
+        return brief_path
+
+    def test_conviction_from_reconstruction_brief_appears_in_ideology_md(self, tmp_path):
+        """--from-reconstruction: conviction from the brief appears in docs/ideology.md."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        brief_path = self._write_brief(tmp_path, MINIMAL_RECONSTRUCTION_BRIEF)
+
+        result = run_bootstrap(
+            project_dir,
+            extra_args=["--from-reconstruction", str(brief_path)],
+        )
+        assert result.exit_code == 0, result.output
+        content = (project_dir / "docs" / "ideology.md").read_text(encoding="utf-8")
+        assert "We prefer clarity over cleverness in all things." in content
+
+    def test_from_reconstruction_skips_ideology_capture_interactively(self, tmp_path):
+        """--from-reconstruction: ideology_capture_flow is NOT called."""
+        from unittest.mock import patch
+        from click.testing import CliRunner
+        from skills.pairmode.scripts.bootstrap import bootstrap
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        brief_path = self._write_brief(tmp_path, MINIMAL_RECONSTRUCTION_BRIEF)
+
+        with patch(
+            "skills.pairmode.scripts.bootstrap._ideology_capture_flow"
+        ) as mock_capture:
+            runner = CliRunner()
+            result = runner.invoke(
+                bootstrap,
+                [
+                    "--project-dir", str(project_dir),
+                    "--project-name", "testproject",
+                    "--stack", "Python / pytest",
+                    "--build-command", "uv run pytest",
+                    "--from-reconstruction", str(brief_path),
+                ],
+                catch_exceptions=False,
+            )
+        assert result.exit_code == 0, result.output
+        mock_capture.assert_not_called()
+
+    def test_from_reconstruction_flag_in_help(self):
+        """--from-reconstruction flag must appear in help output."""
+        runner = CliRunner()
+        result = runner.invoke(bootstrap, ["--help"])
+        assert result.exit_code == 0
+        assert "from-reconstruction" in result.output
+
+    def test_from_reconstruction_prints_reading_message(self, tmp_path):
+        """--from-reconstruction: prints 'Reading reconstruction brief: <path>'."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        brief_path = self._write_brief(tmp_path, MINIMAL_RECONSTRUCTION_BRIEF)
+
+        result = run_bootstrap(
+            project_dir,
+            extra_args=["--from-reconstruction", str(brief_path)],
+        )
+        assert result.exit_code == 0, result.output
+        assert "Reading reconstruction brief:" in result.output
+
+
+class TestConvictionFlagRegressionStillWorks:
+    """Regression: --conviction flag still works independently after 12.3 changes."""
+
+    def test_conviction_flag_still_works(self, tmp_path):
+        """--conviction 'we prefer X over Y': ideology.md contains that conviction."""
+        result = run_bootstrap(
+            tmp_path,
+            extra_args=["--conviction", "we prefer X over Y"],
+        )
+        assert result.exit_code == 0, result.output
+        content = (tmp_path / "docs/ideology.md").read_text(encoding="utf-8")
+        assert "we prefer X over Y" in content
+
+    def test_conviction_flag_does_not_activate_from_reconstruction(self, tmp_path):
+        """Using --conviction does NOT trigger the from-reconstruction path."""
+        from unittest.mock import patch
+        from click.testing import CliRunner
+        from skills.pairmode.scripts.bootstrap import bootstrap
+
+        with patch(
+            "skills.pairmode.scripts.bootstrap._ideology_parser"
+        ) as mock_parser:
+            # Ensure parse_reconstruction_brief is not called when only --conviction used
+            runner = CliRunner()
+            result = runner.invoke(
+                bootstrap,
+                [
+                    "--project-dir", str(tmp_path),
+                    "--project-name", "testproject",
+                    "--stack", "Python / pytest",
+                    "--build-command", "uv run pytest",
+                    "--conviction", "we prefer simplicity",
+                ],
+                catch_exceptions=False,
+            )
+        assert result.exit_code == 0, result.output
+        mock_parser.parse_reconstruction_brief.assert_not_called()
