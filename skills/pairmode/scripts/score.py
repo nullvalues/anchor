@@ -70,6 +70,17 @@ def score(project_dir: str, brief: str | None, force: bool) -> None:
     else:
         brief_path = resolved / "docs" / "reconstruction.md"
 
+    # If --brief was explicitly supplied, ensure it is within project_dir
+    if brief is not None:
+        try:
+            brief_path.relative_to(resolved)
+        except ValueError:
+            click.echo(
+                f"Error: --brief path must be within the project directory ({resolved})",
+                err=True,
+            )
+            raise SystemExit(1)
+
     if not brief_path.exists():
         click.echo(
             f"error: brief not found: {brief_path}\n"

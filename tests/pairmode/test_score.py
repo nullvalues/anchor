@@ -151,3 +151,37 @@ def test_missing_brief_exits_nonzero(tmp_path: pathlib.Path) -> None:
     result = _run(tmp_path)
     assert result.exit_code != 0
     assert "error" in result.output.lower() or "not found" in result.output.lower()
+
+
+def test_brief_outside_project_dir_rejected(tmp_path: pathlib.Path) -> None:
+    """--brief pointing outside project_dir → non-zero exit with 'project directory' in output."""
+    import tempfile
+
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+
+    # Create a sibling temp directory with a brief file
+    sibling_dir = tmp_path / "sibling"
+    sibling_dir.mkdir()
+    outside_brief = sibling_dir / "reconstruction.md"
+    outside_brief.write_text(MINIMAL_BRIEF, encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        score,
+        ["--project-dir", str(project_dir), "--brief", str(outside_brief)],
+        catch_exceptions=False,
+    )
+    assert result.exit_code != 0
+    assert "project directory" in result.output.lower()
+
+
+def test_brief_inside_project_dir_accepted(tmp_path: pathlib.Path) -> None:
+    """--brief pointing to a file inside project_dir → exit 0, RECONSTRUCTION.md created."""
+    _write_brief(tmp_path)
+    inside_brief = tmp_path / "docs" / "reconstruction.md"
+
+    result = _run(tmp_path, ["--brief", str(inside_brief), "--force"])
+    assert result.exit_code == 0, result.output
+    out_path = tmp_path / "docs" / "RECONSTRUCTION.md"
+    assert out_path.exists(), "docs/RECONSTRUCTION.md was not created"

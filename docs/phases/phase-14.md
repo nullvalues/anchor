@@ -196,9 +196,47 @@ agent files — do not overwrite on re-bootstrap unless `--force-agents` is pass
 
 ---
 
-⚙️ DEVELOPER ACTION — Re-bootstrap anchor after Story 14.2
+### Story 14.3 — Fix MEDIUM security finding: constrain `--brief` path in score.py
 
-After 14.2 passes review, re-bootstrap anchor's own pairmode scaffold to generate
+**Acceptance criterion:** When `--brief` is supplied, `score.py` verifies that the resolved
+brief path is contained within `project_dir` (the resolved project directory). An out-of-scope
+`--brief` path aborts with a clear error. Tests pass.
+
+**Instructions:**
+
+The Phase 14 security auditor noted (MEDIUM) that `score.py` accepts `--brief` pointing to
+any readable file on the filesystem, inconsistent with the sibling guard discipline where all
+read paths are derived from the resolved project directory.
+
+After resolving `brief_path` from the `--brief` option (or the default), add a containment
+check:
+
+```python
+# If --brief was explicitly supplied (not the default), ensure it is within project_dir
+if brief_option is not None:
+    try:
+        brief_path.resolve().relative_to(resolved)
+    except ValueError:
+        click.echo(f"Error: --brief path must be within the project directory ({resolved})", err=True)
+        raise SystemExit(1)
+```
+
+Note: the default path (`resolved / "docs" / "reconstruction.md"`) is always within
+`project_dir` by construction, so the guard only applies to an explicitly supplied `--brief`.
+The Click option name in the function signature may differ — read the code and adjust.
+
+No other changes.
+
+**Tests — `tests/pairmode/test_score.py`:**
+- `--brief` pointing outside `project_dir` (e.g., a file in a sibling temp dir): non-zero exit
+  with error message mentioning `project directory`.
+- `--brief` pointing to a file inside `project_dir`: still works (regression).
+
+---
+
+⚙️ DEVELOPER ACTION — Re-bootstrap anchor after Story 14.3
+
+After 14.3 passes review, re-bootstrap anchor's own pairmode scaffold to generate
 `.claude/agents/reconstruction-agent.md`:
 
 ```bash
