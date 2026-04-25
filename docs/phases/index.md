@@ -11,4 +11,4 @@ legacy monolithic doc at `docs/phase-prompts.md`.
 | 9 | Final cleanup — dead code, path fixes, hook pipe contract enforcement | complete | [phase-9.md](phase-9.md) · cp9-final-cleanup |
 | 10 | Ideology capture infrastructure — template, brief upgrade, reviewer/intent-reviewer enforcement, guided capture, staleness audit | complete | [phase-10.md](phase-10.md) · cp10-ideology-infrastructure |
 | 11 | Brief hygiene and reconstruction workflow | complete | [phase-11.md](phase-11.md) · cp11-reconstruction-workflow |
-| 12 | Reconstruction seeding and comparison scaffolding | planned | [phase-12.md](phase-12.md) |
+| 12 | Reconstruction seeding and comparison scaffolding | complete | [phase-12.md](phase-12.md) · cp12-reconstruction-seeding |

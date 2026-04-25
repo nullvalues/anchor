@@ -99,7 +99,10 @@ A complete builder/reviewer workflow that any project can adopt. Pairmode turns 
 # Pass convictions directly without TTY prompts
 /anchor:pairmode bootstrap --conviction "we prefer X over Y because Z" --constraint "never write state from hooks"
 
-# Audit how far a project has drifted from canonical templates (detects stale ideology.md)
+# Seed a new pairmode project from an existing reconstruction.md brief (skips TTY ideology capture)
+/anchor:pairmode bootstrap --from-reconstruction path/to/reconstruction.md
+
+# Audit how far a project has drifted from canonical templates (detects stale ideology.md and reconstruction.md)
 /anchor:pairmode audit
 
 # Apply upstream methodology updates (with per-change confirmation prompts)

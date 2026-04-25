@@ -46,9 +46,11 @@ anchor/
         story_context.py          ← read/write current story in state.json; pairmode detection
         spec_exception.py         ← record protected-file overrides into spec.json conflicts
         reconstruct.py            ← refresh docs/reconstruction.md from ideology.md and brief.md
+        ideology_parser.py        ← shared ideology.md and reconstruction.md brief parser
       templates/                  ← Jinja2 templates for scaffold generation
         CLAUDE.md.j2
         CLAUDE.build.md.j2
+        RECONSTRUCTION.md.j2     ← scoring report template filled in by a reconstruction agent
         agents/
           builder.md.j2
           reviewer.md.j2

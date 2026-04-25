@@ -337,9 +337,12 @@ RECONSTRUCTION_REQUIRED_SECTIONS = [
     "## Non-negotiable ideology",
     "## What must survive any implementation",
     "## Comparison rubric",
-    "## Instructions for the reconstruction agent",
 ]
 ```
+
+Note: `"## Instructions for the reconstruction agent"` is intentionally excluded — it always
+contains hardcoded non-placeholder text (the 7-step instruction block), which would cause the
+staleness check to return `"OK"` for any generated brief regardless of ideology content.
 
 Also update any test fixtures in `test_audit.py` that construct fake reconstruction.md content
 to use these corrected section names (so stale-detection tests still exercise the right paths).
