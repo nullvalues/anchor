@@ -1720,3 +1720,91 @@ class TestConvictionFlagRegressionStillWorks:
             )
         assert result.exit_code == 0, result.output
         mock_parser.parse_reconstruction_brief.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Story 13.1: end-to-end integration test for --from-reconstruction
+# ---------------------------------------------------------------------------
+
+
+def test_from_reconstruction_e2e_against_anchor_brief(tmp_path):
+    """Integration: runs bootstrap --from-reconstruction against anchor's own
+    docs/reconstruction.md and asserts the round-trip produces a populated
+    docs/ideology.md containing real conviction content."""
+    import re
+
+    brief_path = pathlib.Path(__file__).parents[2] / "docs" / "reconstruction.md"
+
+    if not brief_path.exists():
+        pytest.skip("docs/reconstruction.md not found")
+
+    # Parse the reconstruction brief to find at least one conviction under
+    # the ### Convictions sub-heading inside ## Non-negotiable ideology.
+    brief_text = brief_path.read_text(encoding="utf-8")
+
+    # Find the ### Convictions block and extract bullet lines from it.
+    convictions_match = re.search(
+        r"### Convictions\s*\n(.*?)(?=\n###|\n##|\Z)",
+        brief_text,
+        re.DOTALL,
+    )
+    convictions: list[str] = []
+    if convictions_match:
+        block = convictions_match.group(1)
+        for line in block.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- ") and len(stripped) > 4:
+                candidate = stripped[2:].strip()
+                # Skip placeholder/separator lines
+                if candidate and not candidate.startswith("--"):
+                    convictions.append(candidate)
+
+    if not convictions:
+        pytest.skip("No convictions found in docs/reconstruction.md ### Convictions block")
+
+    conviction_text = convictions[0]
+    # Pick a 20+ character substring to assert against
+    assert len(conviction_text) >= 20, (
+        f"First conviction too short to assert against: {conviction_text!r}"
+    )
+    conviction_fragment = conviction_text[:40]
+
+    # Run bootstrap with --from-reconstruction
+    runner = CliRunner()
+    result = runner.invoke(
+        bootstrap,
+        [
+            "--project-dir", str(tmp_path),
+            "--project-name", "anchor-reconstruction-test",
+            "--stack", "Python / uv",
+            "--build-command", "uv run pytest",
+            "--from-reconstruction", str(brief_path),
+        ],
+        input="y\n" * 30,
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0, (
+        f"bootstrap exited with {result.exit_code}\nstdout: {result.output}"
+    )
+
+    ideology_path = tmp_path / "docs" / "ideology.md"
+    assert ideology_path.exists(), "docs/ideology.md was not written by bootstrap"
+
+    ideology_content = ideology_path.read_text(encoding="utf-8")
+
+    # Assert conviction fragment is present
+    assert conviction_fragment in ideology_content, (
+        f"Expected conviction fragment {conviction_fragment!r} not found in ideology.md.\n"
+        f"ideology.md content (first 500 chars):\n{ideology_content[:500]}"
+    )
+
+    # Assert standard ideology.md sections exist
+    assert "## Core convictions" in ideology_content, (
+        "ideology.md missing ## Core convictions section"
+    )
+    assert "## Accepted constraints" in ideology_content, (
+        "ideology.md missing ## Accepted constraints section"
+    )
+    assert "## Reconstruction guidance" in ideology_content, (
+        "ideology.md missing ## Reconstruction guidance section"
+    )
