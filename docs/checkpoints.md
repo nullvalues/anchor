@@ -118,3 +118,14 @@ refreshes reconstruction.md from ideology.md and brief.md. 859 tests pass.
 **Acceptance:** RECONSTRUCTION.md.j2 scoring template created. audit.py detects missing or
 stale reconstruction.md. ideology_parser.py shared parser extracted. bootstrap.py accepts
 --from-reconstruction PATH to seed a new project from a reconstruction brief. 905 tests pass.
+
+---
+
+## cp13-cer-cleanup-e2e
+
+**Phase:** 13 — CER cleanup and end-to-end reconstruction verification
+**Tag command:** `git tag cp13-cer-cleanup-e2e && git push origin cp13-cer-cleanup-e2e`
+**Acceptance:** parse_ideology_text(text) added to ideology_parser.py; parse_ideology_file
+delegates to it; tempfile round-trip eliminated from reconstruct.py (CER-001 resolved).
+Integration test runs bootstrap --from-reconstruction against anchor's own reconstruction.md
+and asserts ideology.md output contains real conviction content. 910 tests pass.

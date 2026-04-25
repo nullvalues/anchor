@@ -261,6 +261,12 @@ etc.); body-level content comparison should not be relied upon for semantic drif
 - Pairmode scripts that import sibling modules must either (a) use `sys.path` insertion to add
   the anchor repo root at import time, or (b) be invoked with `PYTHONPATH` set to the anchor
   repo root. SKILL.md invocations must document the required `PYTHONPATH` prefix.
+- Callers of `parse_reconstruction_brief` that pass constraints to `ideology.md.j2` must
+  normalize the `{name, rule}` schema returned by the parser to `{name, rule, protects,
+  rationale, override_path}` before rendering. `bootstrap.py`'s `--from-reconstruction`
+  branch does this; any new caller must replicate it. `parse_reconstruction_brief`
+  intentionally returns the slim schema because the reconstruction brief does not capture
+  those fields.
 
 ---
 
