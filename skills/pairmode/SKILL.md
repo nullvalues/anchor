@@ -50,6 +50,7 @@ re-scaffolding a project after a major methodology revision.
 - `.companion/state.json` — companion state with `pairmode_version` set
 - `.claude/agents/builder.md`, `reviewer.md`, `loop-breaker.md`, `security-auditor.md`,
   `intent-reviewer.md` — skipped if they already exist unless `--force-agents` is passed.
+- `.claude/agents/reconstruction-agent.md` — skipped if already exists unless `--force-agents` is passed.
 
 **CLI invocation:**
 ```bash

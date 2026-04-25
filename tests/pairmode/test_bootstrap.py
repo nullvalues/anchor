@@ -1808,3 +1808,83 @@ def test_from_reconstruction_e2e_against_anchor_brief(tmp_path):
     assert "## Reconstruction guidance" in ideology_content, (
         "ideology.md missing ## Reconstruction guidance section"
     )
+
+
+# ---------------------------------------------------------------------------
+# Story 14.2: reconstruction-agent.md bootstrap tests
+# ---------------------------------------------------------------------------
+
+class TestReconstructionAgentBootstrap:
+    """Bootstrap writes .claude/agents/reconstruction-agent.md as part of the scaffold."""
+
+    def test_fresh_bootstrap_creates_reconstruction_agent(self, tmp_path):
+        """On a fresh bootstrap, .claude/agents/reconstruction-agent.md is created."""
+        result = run_bootstrap(tmp_path)
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / ".claude/agents/reconstruction-agent.md").exists(), (
+            ".claude/agents/reconstruction-agent.md was not created on fresh bootstrap"
+        )
+
+    def test_reconstruction_agent_contains_phase1_heading(self, tmp_path):
+        """Generated reconstruction-agent.md contains '## Phase 1 — Read the brief'."""
+        run_bootstrap(tmp_path)
+        content = (tmp_path / ".claude/agents/reconstruction-agent.md").read_text(encoding="utf-8")
+        assert "## Phase 1 — Read the brief" in content
+
+    def test_rebootstrap_without_force_agents_preserves_existing_reconstruction_agent(self, tmp_path):
+        """Re-bootstrap without --force-agents does NOT overwrite existing reconstruction-agent.md."""
+        # First bootstrap — creates all files
+        run_bootstrap(tmp_path)
+
+        # Write custom content into the agent file
+        agent_path = tmp_path / ".claude/agents/reconstruction-agent.md"
+        agent_path.write_text("# custom content", encoding="utf-8")
+
+        # Second bootstrap without --force-agents — should skip the agent file
+        runner = CliRunner()
+        result = runner.invoke(
+            bootstrap,
+            [
+                "--project-dir", str(tmp_path),
+                "--project-name", "testproject",
+                "--stack", "Python / pytest",
+                "--build-command", "uv run pytest",
+            ],
+            input="n\n" * 20,
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0, result.output
+        # Custom content must be preserved
+        assert agent_path.read_text(encoding="utf-8") == "# custom content", (
+            "reconstruction-agent.md was overwritten on re-bootstrap without --force-agents"
+        )
+
+    def test_rebootstrap_with_force_agents_overwrites_reconstruction_agent(self, tmp_path):
+        """Re-bootstrap with --force-agents overwrites existing reconstruction-agent.md."""
+        # First bootstrap
+        run_bootstrap(tmp_path)
+
+        # Write custom content into the agent file
+        agent_path = tmp_path / ".claude/agents/reconstruction-agent.md"
+        agent_path.write_text("# custom content", encoding="utf-8")
+
+        # Second bootstrap with --force-agents — should overwrite
+        runner = CliRunner()
+        result = runner.invoke(
+            bootstrap,
+            [
+                "--project-dir", str(tmp_path),
+                "--project-name", "testproject",
+                "--stack", "Python / pytest",
+                "--build-command", "uv run pytest",
+                "--force-agents",
+            ],
+            input="n\n" * 20,
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0, result.output
+        content = agent_path.read_text(encoding="utf-8")
+        assert "# custom content" not in content, (
+            "reconstruction-agent.md was not overwritten despite --force-agents"
+        )
+        assert "## Phase 1 — Read the brief" in content

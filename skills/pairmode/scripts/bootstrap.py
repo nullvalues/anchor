@@ -56,6 +56,7 @@ AGENT_FILES: list[tuple[str, str]] = [
     (".claude/agents/loop-breaker.md", "agents/loop-breaker.md.j2"),
     (".claude/agents/security-auditor.md", "agents/security-auditor.md.j2"),
     (".claude/agents/intent-reviewer.md", "agents/intent-reviewer.md.j2"),
+    (".claude/agents/reconstruction-agent.md", "agents/reconstruction-agent.md.j2"),
 ]
 
 # Default deny list written into .claude/settings.json
