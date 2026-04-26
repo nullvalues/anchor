@@ -43,7 +43,9 @@ Create `skills/pairmode/scripts/score.py` as a Click CLI:
 @click.command()
 @click.option("--project-dir", default=".", type=click.Path(exists=True, file_okay=False),
               help="Root of the reconstructed project.")
-@click.option("--brief", default=None, type=click.Path(exists=True, dir_okay=False),
+@click.option("--brief", default=None, type=click.Path(exists=False, dir_okay=False),
+              # exists=False: existence checked manually after resolution so the
+              # --brief containment guard (Story 14.3) runs before any filesystem access.
               help="Path to reconstruction.md brief. Defaults to <project-dir>/docs/reconstruction.md.")
 @click.option("--force", is_flag=True, default=False,
               help="Overwrite existing docs/RECONSTRUCTION.md without prompting.")
